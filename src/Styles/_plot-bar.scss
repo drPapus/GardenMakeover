@@ -1,0 +1,177 @@
+.plot-bar {
+  position: fixed;
+  left: 50%;
+  bottom: 14px;
+  transform: translateX(-50%);
+  opacity: 0;
+  width: min(980px, calc(100vw - 24px));
+  border-radius: 18px;
+  padding: 12px 12px 10px;
+  z-index: 50;
+
+  background: linear-gradient(180deg, #6b3f1f 0%, #4a2a14 100%);
+  border: 2px solid rgba(255, 255, 255, 0.18);
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.45),
+  inset 0 1px 0 rgba(255, 255, 255, 0.12);
+
+  &__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 4px 6px 8px;
+  }
+
+  &__title {
+    color: #fff3d6;
+    font-weight: 700;
+    letter-spacing: 0.2px;
+    text-shadow: 0 2px 0 rgba(0, 0, 0, 0.25);
+  }
+
+  &__close {
+    appearance: none;
+    border: none;
+    cursor: pointer;
+    border-radius: 12px;
+    padding: 8px 12px;
+    font-weight: 700;
+
+    background: linear-gradient(180deg, #f7d58a 0%, #e9b85c 100%);
+    color: #3a240f;
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.25),
+    inset 0 1px 0 rgba(255, 255, 255, 0.5);
+
+    &:hover {
+      filter: brightness(1.05);
+    }
+  }
+
+  &__sell {
+    display: block;
+    width: 80%;
+    height: 48px;
+    border: none;
+    border-radius: 14px;
+    margin: 20px auto;
+    background: linear-gradient(180deg, #ffd36a 0%, #f0b400 100%);
+    color: #4a2e00;
+    font-size: 16px;
+    font-weight: 700;
+    letter-spacing: 0.3px;
+    cursor: pointer;
+    box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.5),
+    inset 0 -2px 0 rgba(0, 0, 0, 0.15),
+    0 4px 10px rgba(0, 0, 0, 0.25);
+    transition: transform 0.1s ease,
+    box-shadow 0.1s ease,
+    filter 0.1s ease;
+
+    &:hover {
+      transform: translateY(1px);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4),
+      inset 0 -1px 0 rgba(0, 0, 0, 0.2),
+      0 2px 6px rgba(0, 0, 0, 0.25);
+    }
+
+  }
+
+  &__list {
+    display: flex;
+    gap: 10px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: 8px 6px 10px;
+
+    scroll-snap-type: x mandatory;
+    -webkit-overflow-scrolling: touch;
+
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.25) transparent;
+
+    &::-webkit-scrollbar {
+      height: 8px;
+    }
+
+    &::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.25);
+      border-radius: 999px;
+    }
+  }
+
+  &__farm-card {
+    scroll-snap-align: start;
+
+    flex: 0 0 auto;
+    width: 150px;
+    border-radius: 16px;
+    border: 2px solid rgba(255, 255, 255, 0.14);
+    cursor: pointer;
+
+    background: linear-gradient(180deg, #fff3d6 0%, #f1d7a3 100%);
+    box-shadow: 0 10px 22px rgba(0, 0, 0, 0.25),
+    inset 0 1px 0 rgba(255, 255, 255, 0.65);
+
+    padding: 10px;
+    text-align: left;
+    transition: transform 120ms ease, filter 120ms ease;
+
+    &:hover {
+      transform: translateY(-2px);
+      filter: brightness(1.02);
+    }
+  }
+
+  &__meta {
+    margin-top: 8px;
+    display: grid;
+    gap: 4px;
+  }
+
+  &__name {
+    font-weight: 800;
+    color: #2e1c0c;
+    line-height: 1.1;
+  }
+
+  &__price {
+    position: relative;
+    display: inline-flex;
+    width: fit-content;
+    padding: 4px 8px 4px 30px;
+    border-radius: 999px;
+    background: rgba(75, 45, 18, 0.12);
+    color: #3a240f;
+    font-weight: 800;
+
+    &:before {
+      content: '';
+      display: block;
+      width: 20px;
+      height: 20px;
+      background: url("/assets/images/money.png") no-repeat;
+      background-size: contain;
+      position: absolute;
+      left: 5px;
+      top: 4px;
+    }
+  }
+
+  &__preview {
+    height: 84px;
+    border-radius: 14px;
+    background: rgba(0, 0, 0, 0.06);
+    display: grid;
+    place-items: center;
+    overflow: hidden;
+
+    img {
+      width: 86px;
+      height: 86px;
+      object-fit: contain;
+      image-rendering: auto;
+      user-select: none;
+      pointer-events: none;
+    }
+  }
+}
