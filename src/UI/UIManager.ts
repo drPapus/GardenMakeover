@@ -32,15 +32,15 @@ export class UIManager {
     })
   }
 
-  hidePreloader() {
-    const preloader = document.querySelector<HTMLDivElement>('.preloader')
+hidePreloader() {
+  const preloader = document.querySelector<HTMLDivElement>('.preloader')
+  if (!preloader) return
 
-    gsap.to(preloader, {
-      opacity: 0,
-      duration: .6,
-      onComplete: () => {
-        preloader!.style.display = 'none'
-      },
-    })
-  }
+  gsap.to(preloader, {
+    opacity: 0,
+    duration: 0.6,
+    onComplete: () => gsap.set(preloader, { display: 'none' }),
+  })
+  
+}
 }

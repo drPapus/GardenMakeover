@@ -7,6 +7,53 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@100..900&display=swap" rel="stylesheet">
   <title>Garden Makeover</title>
+  <style>
+    .preloader {
+      position: fixed;
+      inset: 0;
+      z-index: 9999;
+      display: grid;
+      place-items: center;
+      background: radial-gradient(1200px 700px at 50% 35%, rgba(255, 233, 170, 0.18), rgba(0, 0, 0, 0) 55%),
+      linear-gradient(180deg, #bfe5a8 0%, #94c17c 50%, #7aa46a 100%);
+    }
+
+    .preloader__icon {
+      width: 110px;
+      height: 110px;
+      border-radius: 26px;
+      background: rgba(255, 255, 255, 0.15);
+      padding: 12px;
+      box-shadow: 0 12px 30px rgba(0, 0, 0, 0.35),
+      inset 0 2px 0 rgba(255, 255, 255, 0.25);
+      animation: preloader-float 1.4s ease-in-out infinite;
+    }
+
+    .preloader__spinner {
+      margin-top: 22px;
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      border: 4px solid rgba(255, 255, 255, 0.25);
+      border-top-color: #ffd36a;
+      animation: preloader-spin 0.9s linear infinite;
+    }
+
+    @keyframes preloader-spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+
+    @keyframes preloader-float {
+      0%, 100% {
+        transform: translateY(0);
+      }
+      50% {
+        transform: translateY(-8px);
+      }
+    }
+  </style>
 </head>
 <body>
 <div id="app">
@@ -14,6 +61,12 @@
     <canvas id="garden"></canvas>
   </div>
 </div>
+
+<div class="preloader">
+  <img class="preloader__icon" src="/assets/images/icon.png" alt="Garden Makeover">
+  <div class="preloader__spinner"></div>
+</div>
+
 <script type="module" src="/src/main.ts"></script>
 </body>
 </html>

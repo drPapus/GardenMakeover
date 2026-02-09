@@ -54,7 +54,7 @@ export class PlotBar {
 
     this.list.innerHTML = Config.farmEntities.map(({type, name, price}) =>
       `<button class="plot-bar__farm-card" data-entity-type="${type}">` +
-      `<div class="plot-bar__preview"><img src="/assets/images/farm-entities/${type}.png" class="plot-bar__preview" alt="${name}"/></div>` +
+      `<div class="plot-bar__preview"><img src="assets/images/farm-entities/${type}.png" class="plot-bar__preview" alt="${name}"/></div>` +
       `<div class="plot-bar__meta">` +
       `<span class="plot-bar__name">${name}</span>` +
       `<span class="plot-bar__price">${price}</span>` +

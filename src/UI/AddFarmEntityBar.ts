@@ -26,7 +26,7 @@ export class AddFarmEntityBar {
 
     list.innerHTML = Config.farmEntities.map(({type, name, price}) =>
       `<button class="add-bar__farm-card" data-entity-type="${type}">` +
-      `<div class="add-bar__preview"><img src="/assets/images/farm-entities/${type}.png" class="add-bar__preview" alt="${name}"/></div>` +
+      `<div class="add-bar__preview"><img src="assets/images/farm-entities/${type}.png" class="add-bar__preview" alt="${name}"/></div>` +
       `<div class="add-bar__meta">` +
       `<span class="add-bar__name">${name}</span>` +
       `<span class="add-bar__price">${price}</span>` +

@@ -18,8 +18,8 @@ export const Config = {
   },
 
   assets: [
-    {url: '/assets/gltf/ground.glb', type: 'model', name: 'farmMain', loader: 'gltf'},
-    {url: '/assets/gltf/objects.glb', type: 'model', name: 'objects', loader: 'gltf'},
+    {url: 'assets/gltf/ground.glb', type: 'model', name: 'farmMain', loader: 'gltf'},
+    {url: 'assets/gltf/objects.glb', type: 'model', name: 'objects', loader: 'gltf'},
   ],
 
   ground: {
