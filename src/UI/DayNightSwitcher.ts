@@ -1,5 +1,0 @@
-export class DayNightSwitcher{
-  constructor() {
-
-  }
-}
