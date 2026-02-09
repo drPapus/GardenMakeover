@@ -21,9 +21,6 @@ export class Assets extends EventDispatcher<{ assetsLoaded: { type: 'assetsLoade
 
     for (const {url, name, loader, type} of Config.assets) {
       loaders[loader].load(url, (obj) => {
-
-        console.log(obj)
-
         switch (name) {
           case 'farmMain':
             this.#setModel({name, obj})
@@ -47,7 +44,6 @@ export class Assets extends EventDispatcher<{ assetsLoaded: { type: 'assetsLoade
 
   #increaseLoadedCount() {
     this.loadedCount++
-    console.log(this.models)
     if (this.assetsToLoadQty === this.loadedCount) this.dispatchEvent({type: 'assetsLoaded'})
   }
 }

@@ -6,8 +6,15 @@ export const Config = {
     fov: 75,
     near: .1,
     far: 100,
-    position: new Vector3(10, 30, 0),
+    position: new Vector3(10, 25, 0),
     lookAt: new Vector3(0, 0, 0),
+    move: {
+      minX: -2,
+      maxX: 10,
+      minZ: -8,
+      maxZ: 8,
+      speed: .06,
+    },
   },
 
   assets: [
@@ -20,14 +27,27 @@ export const Config = {
   },
 
   lights: {
-    ambient: {
-      color: '#ffffff',
-      intensity: 1,
+    day: {
+      ambient: {
+        color: '#ffffff',
+        intensity: 1,
+      },
+      directional: {
+        color: '#fff',
+        intensity: 25,
+        position: new Vector3(10, 35, 20),
+      },
     },
-    directional: {
-      color: '#fff',
-      intensity: 25,
-      position: new Vector3(10, 35, 20),
+    night: {
+      ambient: {
+        color: '#ffffff',
+        intensity: 1,
+      },
+      directional: {
+        color: '#fff',
+        intensity: 2,
+        position: new Vector3(10, 8, 30),
+      },
     },
   },
 

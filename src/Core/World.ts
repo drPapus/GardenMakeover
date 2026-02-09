@@ -1,10 +1,10 @@
 import {
   AmbientLight,
-  DirectionalLight,
+  DirectionalLight, MathUtils,
   PerspectiveCamera,
   ReinhardToneMapping,
   Scene,
-  SRGBColorSpace,
+  SRGBColorSpace, Vector2, Vector3,
   WebGLRenderer,
 } from 'three'
 
@@ -38,7 +38,7 @@ export class World {
     this.scene.add(this.camera)
 
     // Ambient Light
-    const {color: ambientColor, intensity: ambientIntensity} = Config.lights.ambient
+    const {color: ambientColor, intensity: ambientIntensity} = Config.lights.day.ambient
     this.ambientLight = new AmbientLight(ambientColor, ambientIntensity)
     this.scene.add(this.ambientLight)
 
@@ -47,7 +47,7 @@ export class World {
       color: directionalColor,
       intensity: directionalIntensity,
       position: directionalPosition,
-    } = Config.lights.directional
+    } = Config.lights.day.directional
     this.directionalLight = new DirectionalLight(directionalColor, directionalIntensity)
     this.directionalLight.position.copy(directionalPosition)
     this.directionalLight.castShadow = true
@@ -79,6 +79,7 @@ export class World {
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
 
     this.#game.updatables['world'] = () => this.update()
+    this.initCameraMove()
   }
 
   update() {
@@ -92,4 +93,61 @@ export class World {
     this.camera.updateProjectionMatrix()
     this.renderer.setSize(clientWidth, clientHeight)
   }
+
+  initCameraMove() {
+    const canvas = this.#game.canvas
+
+    let dragging = false
+    const last = new Vector2()
+
+    const right = new Vector3()
+    const forward = new Vector3()
+    const move = new Vector3()
+
+    const getPanAxes = () => {
+      right.setFromMatrixColumn(this.camera.matrixWorld, 0)
+      right.y = 0
+      right.normalize()
+
+      this.camera.getWorldDirection(forward)
+      forward.y = 0
+      forward.normalize()
+    }
+
+    const endDrag = () => {
+      dragging = false
+    }
+
+    canvas.addEventListener('pointerdown', e => {
+      dragging = true
+      last.set(e.clientX, e.clientY)
+      canvas.setPointerCapture(e.pointerId)
+    })
+
+    canvas.addEventListener('pointerup', endDrag)
+    canvas.addEventListener('pointercancel', endDrag)
+    canvas.addEventListener('lostpointercapture', endDrag)
+
+    canvas.addEventListener('pointermove', e => {
+      if (!dragging) return
+
+      const dx = e.clientX - last.x
+      const dy = e.clientY - last.y
+      last.set(e.clientX, e.clientY)
+
+      const {minX, maxX, minZ, maxZ, speed} = Config.camera.move
+
+      getPanAxes()
+
+      move.set(0, 0, 0)
+      move.addScaledVector(right, -dx * speed)
+      move.addScaledVector(forward, dy * speed)
+
+      this.camera.position.add(move)
+
+      this.camera.position.x = MathUtils.clamp(this.camera.position.x, minX, maxX)
+      this.camera.position.z = MathUtils.clamp(this.camera.position.z, minZ, maxZ)
+    })
+  }
+
 }

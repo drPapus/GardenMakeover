@@ -1,16 +1,25 @@
+import {EventDispatcher} from 'three'
 import {Game} from './Game'
 import {Plot, TFarmEntity} from '../Entities/Plot'
 import {Config} from './Config'
 import {Economy} from './Economy'
 
 
-export class PlotManager {
+type TEvents = {
+  plotSelected: { type: 'plotSelected' }
+  buySuccess: {type: 'buySuccess'}
+}
+
+
+export class PlotManager extends EventDispatcher<TEvents> {
   #game: Game
   #economy: Economy
   plots: Plot[] = []
   #hittedPlotId: number | null = null
 
   constructor() {
+    super()
+
     this.#game = Game.getInstance()
     this.#economy = this.#game.economy
 
@@ -64,6 +73,7 @@ export class PlotManager {
           const plotInfo = this.plotInfo
 
           this.#game.ui.plotBar.open(isPlaceholder ? 'add' : 'plot', plotInfo)
+          this.dispatchEvent({type: 'plotSelected'})
 
           continue
         }
@@ -88,6 +98,7 @@ export class PlotManager {
     }
 
     this.#game.ui.plotBar.close()
+    this.dispatchEvent({type: 'buySuccess'})
 
     for (const plot of this.plots) {
       plot.isSelected = false

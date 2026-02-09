@@ -44,7 +44,7 @@ export class Debug {
     const axesHelper = new AxesHelper(20)
     this.#game.world.scene.add(axesHelper)
 
-    this.#orbitControls = new OrbitControls(this.#game.world.camera, this.#game.canvas)
+    // this.#orbitControls = new OrbitControls(this.#game.world.camera, this.#game.canvas)
   }
 
   initCameraDebug() {
@@ -87,8 +87,8 @@ export class Debug {
     const {ambientLight, directionalLight} = this.#game.world
 
     const _params = {
-      ambientColor: Config.lights.ambient.color,
-      directionalColor: Config.lights.directional.color,
+      ambientColor: Config.lights.day.ambient.color,
+      directionalColor: Config.lights.day.directional.color,
     }
 
     const folder = this.dat.addFolder('Light')

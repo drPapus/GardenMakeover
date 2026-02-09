@@ -83,6 +83,7 @@ export class PlotBar {
     gsap.set(this.bar, {
       y: 140,
       opacity: 0,
+      pointerEvents: 'none'
     })
 
     this.tl = gsap.timeline({paused: true})
@@ -92,12 +93,19 @@ export class PlotBar {
         opacity: 1,
         duration: .1,
         ease: 'linear',
+        onStart: () => {
+          this.bar.style.pointerEvents = 'auto'
+        }
       }, 0)
       .to(this.bar, {
         y: 0,
         duration: .35,
         ease: 'power3.out',
       }, 0)
+
+    this.tl.eventCallback('onReverseComplete', () => {
+      this.bar.style.pointerEvents = 'none'
+    })
   }
 
   open(mode: 'add' | 'plot', plotInfo?: TplotInfo) {
