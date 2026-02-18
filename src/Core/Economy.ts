@@ -1,14 +1,13 @@
 import {Game} from './Game'
 import {Config} from './Config'
-import {MoneyBar} from '../UI/MoneyBar'
 
 
 export class Economy {
-  #game: Game
+  private game: Game
   money: number = Config.startMoney
 
   constructor() {
-    this.#game = Game.getInstance()
+    this.game = Game.getInstance()
   }
 
   canAfford(cost: number) {
@@ -20,7 +19,7 @@ export class Economy {
 
     this.money -= cost
 
-    this.#game.ui.moneyBar.setMoneyAmount(this.money)
+    this.game.ui.moneyBar.setMoneyAmount(this.money)
 
     return true
   }
@@ -28,6 +27,6 @@ export class Economy {
   earn(amount: number) {
     this.money += amount
 
-    this.#game.ui.moneyBar.setMoneyAmount(this.money)
+    this.game.ui.moneyBar.setMoneyAmount(this.money)
   }
 }

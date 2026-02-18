@@ -1,15 +1,13 @@
 import {
-  AdditiveBlending,
-  Box3,
-  BoxGeometry, CapsuleGeometry, CylinderGeometry,
+  BoxGeometry,
   DoubleSide,
-  Group, MathUtils,
+  Group,
   Mesh,
   MeshBasicMaterial,
-  MeshStandardMaterial, NormalBlending,
   Object3D,
   Scene,
   Vector3,
+  EventDispatcher,
 } from 'three'
 import {clone as SceletonClone} from 'three/examples/jsm/utils/SkeletonUtils.js'
 import {gsap} from 'gsap'
@@ -18,86 +16,130 @@ import {Game} from '../Core/Game'
 import {fitObjectIntoBox} from '../Utils/FitObjectIntoBox'
 import {Config} from '../Core/Config'
 import {makeVerticalGradientTexture} from '../Utils/GradientTexture'
+import {getCareActionByEntity} from '../Utils/CareActionByEntity'
 
 
+export type TPlotID = typeof Config['plots'][number]['id']
 export type TCropBed = 'corn' | 'tomato' | 'strawberry' | 'grape'
 export type TAnimals = 'chicken' | 'sheep' | 'cow'
 export type TFarmEntity = TCropBed | TAnimals
 export type TGrowthStage = typeof Config.growth.stages[number]
+export type TGrowthState = 'empty' | 'growingFirstHalf' | 'needsCare' | 'growingSecondHalf' | 'ripe'
+export type TCareAction = 'water' | 'feed'
+type TEvents = {
+  needsCare: { type: 'needsCare', action: TCareAction }
+  ripe: { type: 'ripe' }
+  stageChanged: { type: 'stageChanged' }
+}
+
+const plotSize = {
+  width: 6,
+  depth: 10,
+}
+
+const growingFirstHalfMultiplier = .7
+
+const cropBedPositions = [
+  new Vector3(-2, 0, -3), new Vector3(-2, 0, 0), new Vector3(-2, 0, 3),
+  new Vector3(2, 0, -3), new Vector3(2, 0, 0), new Vector3(2, 0, 3),
+]
+
+const animalPositions = [
+  new Vector3(-1, 0, 1.5), new Vector3(-1, 0, -2.5),
+  new Vector3(1, 0, 1.5), new Vector3(1, 0, -2.5),
+]
 
 
-export class Plot {
-  #game: Game
-  #scene: Scene
-  #isSelected: boolean = false
-  object: Group
-  #selector!: Mesh
-  #hitBox!: Mesh
-  #growthIndicator!: Mesh
-  id: number = 0
+export class Plot extends EventDispatcher<TEvents> {
+  private game: Game
+  private scene: Scene
 
-  #farmEntityType: TFarmEntity | null = null
-  #growthStageIndex: number = 0
-  #timeInStage: number = 0
-  #timeInToRipe: number = 0
-  #timeToRipe: number = 0
-  #isRipe: boolean = false
+  readonly object: Group
+  private selector!: Mesh
+  private hitBox!: Mesh
+  readonly position: Vector3 = new Vector3()
 
-  constructor(id: number, position: Vector3) {
-    this.#game = Game.getInstance()
-    this.#scene = this.#game.world.scene
+  private isSelected: boolean = false
+  readonly id: TPlotID
+
+  private growthState: TGrowthState = 'empty'
+  private visualStage: TGrowthStage = 'soil'
+  private totalGrowDurationSeconds: number = 0
+  private elapsedGrowSeconds: number = 0
+  private isCareRequired: boolean = false
+  private careDone: boolean = false
+
+  private entityType: TFarmEntity | null = null
+  private isRipe: boolean = false
+
+  constructor(id: TPlotID, position: Vector3) {
+    super()
+
+    this.game = Game.getInstance()
+    this.scene = this.game.world.scene
 
     this.id = id
+    this.position.copy(position)
 
     this.object = new Group()
     this.object.position.copy(position)
-    this.#scene.add(this.object)
+    this.scene.add(this.object)
 
-    this.#initHitBox()
-    this.#initSelector()
-    this.#initGrowthIndicator()
+    this.initHitBox()
+    this.initSelector()
 
     this.setFarmEntity(null, 'ripe', true)
   }
 
   get isSelectable() {
-    return this.#farmEntityType === null ? true : this.#isRipe
+    return this.entityType === null ? true : this.isRipe
   }
 
-  get isRipe() {
-    return this.#isRipe
+  get needsCare() {
+    return this.isCareRequired
+  }
+
+  get growthProgress() {
+    if (this.growthState === 'growingFirstHalf') return gsap.utils.mapRange(
+      0, this.totalGrowDurationSeconds * growingFirstHalfMultiplier,
+      0, 1,
+      this.elapsedGrowSeconds,
+    )
+
+    if (this.growthState === 'growingSecondHalf') return gsap.utils.mapRange(
+      this.totalGrowDurationSeconds * growingFirstHalfMultiplier, this.totalGrowDurationSeconds,
+      0, 1,
+      this.elapsedGrowSeconds,
+    )
+
+    return 0
   }
 
   get type() {
-    return this.#farmEntityType
+    return this.entityType
   }
 
-  set isSelected(val: boolean) {
-    if (val) {
-      this.#selector.visible = true
-    } else {
-      if (val !== this.#isSelected) this.#selector.visible = false
-    }
-
-    this.#isSelected = val
+  setSelected(val: boolean) {
+    this.isSelected = val
+    this.selector.visible = val
   }
 
-  #initHitBox() {
-    const geom = new BoxGeometry(6, 2, 10)
+  private initHitBox() {
+    const geom = new BoxGeometry(plotSize.width, 2, plotSize.depth)
     const mat = new MeshBasicMaterial({color: '#e10000'})
     const mesh = new Mesh(geom, mat)
     mesh.name = 'hitbox'
 
-    this.#hitBox = mesh
-    this.#hitBox.userData.plotId = this.id
-    this.#hitBox.layers.set(1)
+    this.hitBox = mesh
+    this.hitBox.userData.plotId = this.id
+    this.hitBox.layers.set(1)
 
-    this.#game.raycaster.intersectObjects.push(this.#hitBox)
+    this.game.raycaster.intersectObjects.push(this.hitBox)
 
     this.object.add(mesh)
   }
 
-  #initSelector() {
+  private initSelector() {
     const gradientTexture = makeVerticalGradientTexture()
 
     const geom = new BoxGeometry(6, 2, 10)
@@ -116,100 +158,117 @@ export class Plot {
     mesh.position.y += 1
     mesh.visible = false
 
-    this.#selector = mesh
+    this.selector = mesh
     this.object.add(mesh)
+  }
+
+  applyCare() {
+    if (this.growthState !== 'needsCare') return
+
+    this.careDone = true
+    this.isCareRequired = false
+    this.growthState = 'growingSecondHalf'
   }
 
   setFarmEntity(type: TFarmEntity | null, stage: TGrowthStage, firstAdd: boolean = true) {
     const cropBedTypes: TCropBed[] = ['corn', 'grape', 'strawberry', 'tomato']
     const animalTypes: TAnimals[] = ['chicken', 'cow', 'sheep']
 
-    this.#farmEntityType = type
-    this.#resetPlot()
+    this.entityType = type
+    this.resetPlot()
 
-    this.#growthIndicator.visible = stage !== 'ripe'
+    if (type !== null && stage === 'ripe') this.dispatchEvent({type: 'ripe'})
 
     if (firstAdd) {
-      this.#growthStageIndex = 0
-      this.#timeInStage = 0
-      this.#timeInToRipe = 0
-      this.#isRipe = false
-      this.#timeToRipe = type === null ? 0 : Config.growth.durations[this.#farmEntityType!].reduce((acc, cur) => acc + cur, 0)
+      this.isRipe = false
+      this.elapsedGrowSeconds = 0
+      this.totalGrowDurationSeconds = type === null ? 0 : Config.growth.durations[type]
+      this.visualStage = 'soil'
+      this.growthState = 'growingFirstHalf'
+      this.careDone = false
+      this.isCareRequired = false
     }
 
     if (type === null) {
-      this.#makePlaceholder()
+      this.makePlaceholder()
     } else if ((cropBedTypes as string[]).includes(type)) {
-      this.#makeCropBed(type as TCropBed, stage)
+      this.makeCropBed(type as TCropBed, stage)
     } else if ((animalTypes as string[]).includes(type)) {
-      this.#makeAnimals(type as TAnimals, stage)
+      this.makeAnimals(type as TAnimals, stage)
+    }
+
+    this.dispatchEvent({type: 'stageChanged'})
+  }
+
+  update(deltaSeconds: number) {
+    if (!this.entityType) return
+    if (this.growthState === 'empty' || this.growthState === 'ripe') return
+    if (this.growthState === 'needsCare') return
+
+    this.elapsedGrowSeconds += deltaSeconds
+
+    const halfTime = this.totalGrowDurationSeconds * growingFirstHalfMultiplier
+
+    if (this.growthState === 'growingFirstHalf') {
+      if (this.elapsedGrowSeconds >= halfTime) {
+        this.elapsedGrowSeconds = halfTime
+        this.setStageByProgress(growingFirstHalfMultiplier)
+
+        this.growthState = 'needsCare'
+        this.isCareRequired = true
+
+        const action = getCareActionByEntity(this.entityType)
+        this.dispatchEvent({type: 'needsCare', action})
+        return
+      }
+
+      const p = this.elapsedGrowSeconds / this.totalGrowDurationSeconds
+      this.setStageByProgress(p)
+      return
+    }
+
+    if (this.growthState === 'growingSecondHalf') {
+      if (this.elapsedGrowSeconds >= this.totalGrowDurationSeconds) {
+        this.elapsedGrowSeconds = this.totalGrowDurationSeconds
+        this.growthState = 'ripe'
+        this.setStageByProgress(1)
+
+        this.dispatchEvent({type: 'ripe'})
+        return
+      }
+
+      const p = this.elapsedGrowSeconds / this.totalGrowDurationSeconds
+      this.setStageByProgress(p)
     }
   }
 
-  update(delta: number) {
-    if (this.#farmEntityType === null) return
+  private setStageByProgress(progress01: number) {
+    const p = Math.max(0, Math.min(1, progress01))
 
-    const stages = Config.growth.stages
-    const durations = Config.growth.durations[this.#farmEntityType]
+    let nextStage: TGrowthStage = 'soil'
 
-    // already ripe
-    if (this.#isRipe) return
+    if (p >= 1) {
+      nextStage = 'ripe'
+    } else if (p >= growingFirstHalfMultiplier) {
+      nextStage = 'medium'
+    } else {
+      const t = p * growingFirstHalfMultiplier
 
-    this.#timeInToRipe += delta
-    this.#timeInStage += delta
+      if (t < 1 / 3) nextStage = 'soil'
+      else if (t < 2 / 3) nextStage = 'small'
+      else nextStage = 'medium'
+    }
 
-    this.#updateGrowthIndicator()
+    if (nextStage === this.visualStage) return
+    this.visualStage = nextStage
 
-    const duration = durations[this.#growthStageIndex]
-
-    if (this.#timeInStage < duration) return
-
-    this.#growthStageIndex++
-    this.#timeInStage = 0
-
-    this.setFarmEntity(this.#farmEntityType, Config.growth.stages[this.#growthStageIndex], false)
+    this.setFarmEntity(this.entityType, this.visualStage, false)
   }
 
-  #updateGrowthIndicator() {
-    const progress = gsap.utils.mapRange(0.001, 1, 0.001, .9, this.#timeInToRipe / this.#timeToRipe)
+  private makePlaceholder() {
+    this.isRipe = false
 
-    this.#growthIndicator.children[0].scale.y = progress
-    this.#growthIndicator.children[0].position.y = -1.35 + 1.5 * progress
-  }
-
-  #initGrowthIndicator() {
-    const geom = new CylinderGeometry(1, 1, 3, 14, 1)
-    const trackMat = new MeshBasicMaterial({
-      color: '#000',
-      transparent: true,
-      opacity: .1,
-      depthWrite: false,
-    })
-    const fillMat = new MeshBasicMaterial({
-      color: '#40ff02',
-      depthWrite: false,
-      blending: NormalBlending
-    })
-    fillMat.color.multiplyScalar(5)
-
-    const track = new Mesh(geom, trackMat)
-    const fill = new Mesh(geom, fillMat)
-    fill.scale.set(.9, 0.001, .9)
-
-    track.name = 'growthIndicator'
-    track.rotateX(Math.PI * 1.5)
-    track.add(fill)
-
-    track.position.y = 5
-
-    this.#growthIndicator = track
-    this.object.add(track)
-  }
-
-  #makePlaceholder() {
-    this.#isRipe = false
-
-    const placeholder = (this.#game.assets.models.placeholder as Mesh).clone()
+    const placeholder = (this.game.assets.models.placeholder as Mesh).clone()
 
     placeholder.receiveShadow = true
 
@@ -218,17 +277,12 @@ export class Plot {
     this.object.add(placeholder)
   }
 
-  #makeCropBed(type: TCropBed, stage: TGrowthStage) {
-    const positions = [
-      new Vector3(-2, 0, -3), new Vector3(-2, 0, 0), new Vector3(-2, 0, 3),
-      new Vector3(2, 0, -3), new Vector3(2, 0, 0), new Vector3(2, 0, 3),
-    ]
-
-    this.#isRipe = stage === 'ripe'
+  private makeCropBed(type: TCropBed, stage: TGrowthStage) {
+    this.isRipe = stage === 'ripe'
 
     switch (stage) {
       case 'soil': {
-        const ground = (this.#game.assets.models.ground as Mesh).clone()
+        const ground = (this.game.assets.models.ground as Mesh).clone()
         ground.receiveShadow = true
         fitObjectIntoBox(ground, {width: 6, depth: 10})
         this.object.add(ground)
@@ -237,9 +291,10 @@ export class Plot {
       case 'small':
       case 'medium':
       case 'ripe': {
-        const source = this.#game.assets.models[`${type}_${this.#growthStageIndex}`] as Mesh
+        const growthStageIndex = Config.growth.stages.indexOf(stage)
+        const source = this.game.assets.models[`${type}_${growthStageIndex}`] as Mesh
 
-        for (const position of positions) {
+        for (const position of cropBedPositions) {
           const obj = source.clone()
           obj.position.copy(position)
           this.object.add(obj)
@@ -248,13 +303,8 @@ export class Plot {
     }
   }
 
-  #makeAnimals(type: TAnimals, stage: TGrowthStage) {
-    const positions = [
-      new Vector3(-1, 0, 1.5), new Vector3(-1, 0, -2.5),
-      new Vector3(1, 0, 1.5), new Vector3(1, 0, -2.5),
-    ]
-
-    this.#isRipe = stage === 'ripe'
+  private makeAnimals(type: TAnimals, stage: TGrowthStage) {
+    this.isRipe = stage === 'ripe'
 
     const scales: Record<TGrowthStage, number> = {
       soil: .2,
@@ -263,15 +313,15 @@ export class Plot {
       ripe: 1,
     }
 
-    const fence = (this.#game.assets.models.fence as Mesh).clone()
+    const fence = (this.game.assets.models.fence as Mesh).clone()
 
     fitObjectIntoBox(fence, {width: 6, depth: 10})
 
     this.object.add(fence)
 
-    const source = this.#game.assets.models[`${type}_1`] as Object3D
+    const source = this.game.assets.models[`${type}_1`] as Object3D
 
-    for (const position of positions) {
+    for (const position of animalPositions) {
       const obj = SceletonClone(source)
 
       obj.position.copy(position)
@@ -283,24 +333,10 @@ export class Plot {
 
   }
 
-  #resetPlot() {
-    const toRemove = this.object.children.filter(child => !['hitbox', 'selector', 'growthIndicator'].includes(child.name))
+  private resetPlot() {
+    const toRemove = this.object.children.filter(child => !['hitbox', 'selector'].includes(child.name))
 
     for (const child of toRemove) {
-      child.traverse(obj => {
-        if (obj instanceof Mesh) {
-          obj.geometry?.dispose()
-
-          const mat = (obj as Mesh).material
-
-          if (Array.isArray(mat)) {
-            for (const m of mat) m.dispose()
-          } else {
-            mat.dispose()
-          }
-        }
-      })
-
       this.object.remove(child)
     }
   }

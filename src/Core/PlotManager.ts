@@ -1,29 +1,30 @@
-import {EventDispatcher} from 'three'
+import {Color, EventDispatcher, Mesh, MeshPhysicalMaterial, MeshStandardMaterial} from 'three'
 import {Game} from './Game'
-import {Plot, TFarmEntity} from '../Entities/Plot'
+import {Plot, TFarmEntity, TPlotID} from '../Entities/Plot'
 import {Config} from './Config'
 import {Economy} from './Economy'
 
 
 type TEvents = {
   plotSelected: { type: 'plotSelected' }
-  buySuccess: {type: 'buySuccess'}
+  buySuccess: { type: 'buySuccess' }
+  plotsInited: { type: 'plotsInited' }
 }
 
 
 export class PlotManager extends EventDispatcher<TEvents> {
-  #game: Game
-  #economy: Economy
+  private game: Game
+  private economy: Economy
   plots: Plot[] = []
-  #hittedPlotId: number | null = null
+  private hittedPlotId: TPlotID | null = null
 
   constructor() {
     super()
 
-    this.#game = Game.getInstance()
-    this.#economy = this.#game.economy
+    this.game = Game.getInstance()
+    this.economy = this.game.economy
 
-    this.#game.assets.addEventListener('assetsLoaded', () => this.init())
+    this.game.assets.addEventListener('assetsLoaded', () => this.init())
   }
 
   init() {
@@ -31,7 +32,46 @@ export class PlotManager extends EventDispatcher<TEvents> {
       this.plots.push(new Plot(id, position))
     }
 
-    this.#game.updatables['plotManager'] = (delta: number) => this.update(delta)
+    this.preparePlotMaterials()
+    this.dispatchEvent({type: 'plotsInited'})
+  }
+
+  private preparePlotMaterials() {
+    console.log(this.game.assets.models)
+    const toPrepare = [
+      'placeholder', 'ground', 'fence',
+      'chicken_1', 'cow_1', 'sheep_1',
+      'corn_1', 'corn_2', 'corn_3',
+      'grape_1', 'grape_2', 'grape_3',
+      'strawberry_1', 'strawberry_2', 'strawberry_3',
+      'tomato_1', 'tomato_2', 'tomato_3',
+    ]
+
+    const materialCache = new Map()
+
+    for (const modelName of toPrepare) {
+      const obj = this.game.assets.models[modelName]
+
+      obj.traverse(child => {
+        if (child instanceof Mesh) {
+          child.castShadow = true
+
+          const oldMaterial = child.material as MeshPhysicalMaterial
+          const colorHex = oldMaterial.color.getHex()
+
+          if (!materialCache.has(colorHex)) {
+            materialCache.set(colorHex, new MeshStandardMaterial({
+              color: new Color().copy(oldMaterial.color),
+              metalness: .1,
+              roughness: .6,
+              flatShading: true,
+            }))
+          }
+
+          child.material = materialCache.get(colorHex)
+        }
+      })
+    }
   }
 
   update(delta: number) {
@@ -40,85 +80,90 @@ export class PlotManager extends EventDispatcher<TEvents> {
     }
   }
 
-  get plotInfo() {
-    if (this.#hittedPlotId === null) return undefined
+  getPlotInfo(id: TPlotID | null) {
+    if (id === null) return undefined
 
-    const plotType = this.plots.find(({id}) => id === this.#hittedPlotId)!.type
-    return Config.farmEntities.find(({type}) => type === plotType)!
+    const plot = this.plots.find(({id: _id}) => _id === id)
+    if (!plot) return undefined
+
+    return Config.farmEntities.find(({type}) => type === plot.type)
   }
 
-  set hittedPlotId(id: number | null) {
-    this.#hittedPlotId = id
+  setHittedPlot(id: TPlotID | null) {
+    this.hittedPlotId = id
+
+    for (const plot of this.plots) {
+      plot.setSelected(false)
+    }
 
     if (id === null) {
-      for (const plot of this.plots) {
-        plot.isSelected = false
-      }
-
-      this.#game.ui.plotBar.close()
-    } else {
-      for (const plot of this.plots) {
-        if (plot.id === id) {
-          const isSelectable = plot.isSelectable
-          const isPlaceholder = plot.type === null
-
-          if (!isSelectable) {
-            plot.isSelected = false
-            this.#game.ui.plotBar.close()
-            continue
-          }
-
-          plot.isSelected = true
-
-          const plotInfo = this.plotInfo
-
-          this.#game.ui.plotBar.open(isPlaceholder ? 'add' : 'plot', plotInfo)
-          this.dispatchEvent({type: 'plotSelected'})
-
-          continue
-        }
-
-        plot.isSelected = false
-      }
-    }
-  }
-
-  buyFarmEntity(type: TFarmEntity) {
-    const plot = this.plots.find(({id}) => id === this.#hittedPlotId)
-
-    if (!plot) throw new Error('Plot not found')
-
-    const price = Config.farmEntities.find(({type: _type}) => _type === type)!.price
-
-    const isBuySuccess = this.#economy.spend(price)
-
-    if (!isBuySuccess) {
-      this.#game.ui.popup.open('Not enough money')
+      this.game.ui.addEntityMenu.close()
+      this.game.world.restoreCamera()
       return
     }
 
-    this.#game.ui.plotBar.close()
+    const plot = this.plots.find(plot => plot.id === id)
+    if (!plot) return
+
+    if (plot.needsCare) {
+      plot.applyCare()
+      this.game.ui.careActionUI.hide(id)
+      return
+    }
+
+    if (!plot.isSelectable) {
+      this.game.ui.addEntityMenu.close()
+      this.game.world.restoreCamera()
+      return
+    }
+
+    plot.setSelected(true)
+
+    if (plot.type === null) {
+      this.game.ui.addEntityMenu.open()
+      this.game.world.focusCameraOnPoint(plot.position)
+    }
+
+    this.dispatchEvent({type: 'plotSelected'})
+  }
+
+  buyFarmEntity(type: TFarmEntity) {
+    const plot = this.plots.find(({id}) => id === this.hittedPlotId)
+
+    if (!plot) throw new Error('Plot not found')
+
+    const price = Config.farmEntities.find(entity => entity.type === type)!.price
+
+    const isBuySuccess = this.economy.spend(price)
+
+    if (!isBuySuccess) {
+      this.game.ui.popup.open('Not enough money')
+      return
+    }
+
+    this.game.ui.addEntityMenu.close()
+    this.game.ui.spendMoney.play(plot.id, price)
     this.dispatchEvent({type: 'buySuccess'})
 
     for (const plot of this.plots) {
-      plot.isSelected = false
+      plot.setSelected(false)
     }
 
     plot.setFarmEntity(type, 'soil')
   }
 
-  sellFarmEntity() {
-    const plot = this.plots.find(({id}) => id === this.#hittedPlotId)
+  sellFarmEntity(id: TPlotID) {
+    const plot = this.plots.find((plot) => id === plot.id)
 
     if (!plot) throw new Error('Plot not found')
 
-    const sellPrice = this.plotInfo!.sellPrice
+    const sellPrice = this.getPlotInfo(id)!.sellPrice
 
-    this.#economy.earn(sellPrice)
-    this.#game.ui.plotBar.close()
+    this.economy.earn(sellPrice)
+    this.game.ui.addEntityMenu.close()
 
     for (const plot of this.plots) {
-      plot.isSelected = false
+      plot.setSelected(false)
     }
 
     plot.setFarmEntity(null, 'ripe', true)

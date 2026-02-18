@@ -1,6 +1,10 @@
-import {AxesHelper, Color, DirectionalLightHelper, PerspectiveCamera, Vector3} from 'three'
-import Stats from 'three/examples/jsm/libs/stats.module.js'
-import {OrbitControls} from 'three/examples/jsm/controls/OrbitControls.js'
+import {
+  AxesHelper,
+  Color,
+  DirectionalLightHelper,
+  PerspectiveCamera,
+  Fog,
+} from 'three'
 import {GUI} from 'dat.gui'
 
 import {Game} from '../Core/Game'
@@ -11,44 +15,32 @@ const vec3Key = ['x', 'y', 'z'] as const
 
 
 export class Debug {
-  #game: Game
+  private game: Game
   dat: GUI
-  #stats: Stats
-  #orbitControls?: OrbitControls
 
   constructor() {
-    this.#game = Game.getInstance()
+    this.game = Game.getInstance()
 
     this.dat = new GUI()
-
-    this.#stats = new Stats()
-    document.body.append(this.#stats.dom)
+    this.dat.domElement.parentElement!.style.zIndex = '9999'
 
     this.initCameraDebug()
     this.initLightsDebug()
     this.initHelpers()
     this.initPlotsDebug()
-
-    this.#game.updatables['debug'] = () => this.update()
-  }
-
-  update() {
-    this.#orbitControls?.update()
-    this.#stats.update()
+    this.initFogDebug()
   }
 
   initHelpers() {
-    const directionalLightHelper = new DirectionalLightHelper(this.#game.world.directionalLight, 5)
-    this.#game.world.scene.add(directionalLightHelper)
+    const directionalLightHelper = new DirectionalLightHelper(this.game.world.directionalLight, 5)
+    this.game.world.scene.add(directionalLightHelper)
 
     const axesHelper = new AxesHelper(20)
-    this.#game.world.scene.add(axesHelper)
-
-    // this.#orbitControls = new OrbitControls(this.#game.world.camera, this.#game.canvas)
+    this.game.world.scene.add(axesHelper)
   }
 
   initCameraDebug() {
-    const camera = this.#game.world.camera
+    const camera = this.game.world.camera
 
     const folder = this.dat.addFolder('Camera')
 
@@ -84,29 +76,37 @@ export class Debug {
   }
 
   initLightsDebug() {
-    const {ambientLight, directionalLight} = this.#game.world
+    const {hemisphereLight, directionalLight} = this.game.world
 
     const _params = {
-      ambientColor: Config.lights.day.ambient.color,
+      hemisphereSkyColor: Config.lights.day.hemisphere.skyColor,
+      hemisphereGroundColor: Config.lights.day.hemisphere.groundColor,
       directionalColor: Config.lights.day.directional.color,
     }
 
     const folder = this.dat.addFolder('Light')
 
-    const ambientFolder = folder.addFolder('Ambient')
+    const hemisphereFolder = folder.addFolder('Hemisphere')
 
-    ambientFolder
-      .add(ambientLight, 'intensity')
+    hemisphereFolder
+      .add(hemisphereLight, 'intensity')
       .name('Intensity')
       .min(0)
       .max(20)
       .step(.01)
 
-    ambientFolder
-      .addColor(_params, 'ambientColor')
-      .name('Color')
+    hemisphereFolder
+      .addColor(_params, 'hemisphereSkyColor')
+      .name('Sky Color')
       .onChange(() => {
-        ambientLight.color = new Color(_params.ambientColor)
+        hemisphereLight.color = new Color(_params.hemisphereSkyColor)
+      })
+
+    hemisphereFolder
+      .addColor(_params, 'hemisphereGroundColor')
+      .name('Ground Color')
+      .onChange(() => {
+        hemisphereLight.groundColor = new Color(_params.hemisphereGroundColor)
       })
 
     const directionalFolder = folder.addFolder('Directional')
@@ -136,8 +136,8 @@ export class Debug {
   }
 
   initPlotsDebug() {
-    this.#game.assets.addEventListener('assetsLoaded', () => {
-      const plots = this.#game.plotManager.plots
+    this.game.assets.addEventListener('assetsLoaded', () => {
+      const plots = this.game.plotManager.plots
 
       for (const plot of plots) {
         const folder = this.dat.addFolder(`Plot ${plot.id}`)
@@ -152,5 +152,36 @@ export class Debug {
         }
       }
     })
+  }
+
+  initFogDebug() {
+    const fog = this.game.world.scene.fog as Fog
+
+    const folder = this.dat.addFolder('Fog')
+
+    const _params = {
+      color: Config.fog.color,
+    }
+
+    folder
+      .add(fog, 'near')
+      .name(`Near`)
+      .min(0)
+      .max(200)
+      .step(.5)
+
+    folder
+      .add(fog, 'far')
+      .name(`Far`)
+      .min(0)
+      .max(200)
+      .step(.5)
+
+    folder
+      .addColor(_params, 'color')
+      .name('Color')
+      .onChange(() => {
+        fog.color = new Color(_params.color)
+      })
   }
 }

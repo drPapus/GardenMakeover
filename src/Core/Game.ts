@@ -5,33 +5,44 @@ import {Assets} from './Assets'
 import {FarmMain} from '../Entities/FarmMain'
 import {Debug} from '../Utils/Debug'
 import {PlotManager} from './PlotManager'
-import {UIManager} from '../UI/UIManager'
 import {Raycaster} from './Raycaster'
 import {Economy} from './Economy'
+import {InputRouter} from './InputRouter'
+import {UIManager} from '../UI/UIManager'
 
 
 export class Game {
   private static instance: Game | null = null
   canvasContainer: HTMLDivElement
-  canvas: HTMLCanvasElement
+  threeCanvas: HTMLCanvasElement
+  pixiCanvas: HTMLCanvasElement
   isDebugMode: boolean
-  updatables: Record<string, (delta: number) => void> = {}
 
   clock: Clock
   debug!: Debug
   assets!: Assets
   world!: World
   raycaster!: Raycaster
-  ground!: FarmMain
+  farmMain!: FarmMain
   plotManager!: PlotManager
-  ui!: UIManager
   economy!: Economy
+  inputRouter!: InputRouter
+  ui!: UIManager
 
   private constructor(canvasContainer: HTMLDivElement) {
     this.canvasContainer = canvasContainer
-    this.canvas = this.canvasContainer.querySelector('canvas')!
+    const threeCanvas = this.canvasContainer.querySelector<HTMLCanvasElement>('#three-canvas')
+    const pixiCanvas = this.canvasContainer.querySelector<HTMLCanvasElement>('#pixi-canvas')
+
+    if (!threeCanvas) throw new Error('Three canvas not found')
+    if (!pixiCanvas) throw new Error('Pixi canvas not found')
+
+    this.threeCanvas = threeCanvas
+    this.pixiCanvas = pixiCanvas
+
     this.isDebugMode = Boolean(new URLSearchParams(window.location.search).get('debug'))
     this.clock = new Clock()
+
   }
 
   public static getInstance(canvasContainer?: HTMLDivElement): Game {
@@ -44,14 +55,16 @@ export class Game {
     return Game.instance
   }
 
-  init() {
+  async init() {
     this.assets = new Assets()
     this.world = new World()
-    this.ground = new FarmMain()
+    this.farmMain = new FarmMain()
     this.economy = new Economy()
     this.plotManager = new PlotManager()
     this.raycaster = new Raycaster()
     this.ui = new UIManager()
+    await this.ui.init()
+    this.inputRouter = new InputRouter()
 
     this.onResize()
 
@@ -65,20 +78,19 @@ export class Game {
 
   initEvents() {
     window.addEventListener('resize', () => this.onResize())
-    this.canvas.addEventListener('pointerdown', e => {
-      this.raycaster.onPointerDown(e)
-    })
   }
 
   onUpdate() {
     const delta = this.clock.getDelta()
 
-    for (const key in this.updatables) {
-      this.updatables[key](delta)
-    }
+    this.plotManager.update(delta)
+
+    this.world.render()
+    this.ui.render()
   }
 
   onResize() {
     this.world.resize()
+    this.ui.resize()
   }
 }

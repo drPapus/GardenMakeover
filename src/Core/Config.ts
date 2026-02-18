@@ -3,23 +3,44 @@ import {Vector3} from 'three'
 
 export const Config = {
   camera: {
-    fov: 75,
+    fov: 40,
     near: .1,
     far: 100,
-    position: new Vector3(10, 25, 0),
-    lookAt: new Vector3(0, 0, 0),
+    position: new Vector3(10, 38, 0),
+    lookAt: new Vector3(-8, 0, 0),
     move: {
-      minX: -2,
-      maxX: 10,
-      minZ: -8,
-      maxZ: 8,
+      minX: 4,
+      maxX: 18,
+      minZ: -10,
+      maxZ: 10,
       speed: .06,
     },
   },
 
+  fog: {
+    near: 38,
+    far: 60,
+    color: '#ceffb8',
+  },
+
   assets: [
-    {url: 'assets/gltf/ground.glb', type: 'model', name: 'farmMain', loader: 'gltf'},
-    {url: 'assets/gltf/objects.glb', type: 'model', name: 'objects', loader: 'gltf'},
+    {url: '/assets/gltf/ground.glb', type: 'model', name: 'farmMain', loader: 'gltf'},
+    {url: '/assets/gltf/objects.glb', type: 'model', name: 'objects', loader: 'gltf'},
+
+    {url: '/assets/images/farm-entities/chicken.png', type: 'texture', name: 'chicken', loader: 'pixi'},
+    {url: '/assets/images/farm-entities/corn.png', type: 'texture', name: 'corn', loader: 'pixi'},
+    {url: '/assets/images/farm-entities/cow.png', type: 'texture', name: 'cow', loader: 'pixi'},
+    {url: '/assets/images/farm-entities/grape.png', type: 'texture', name: 'grape', loader: 'pixi'},
+    {url: '/assets/images/farm-entities/sheep.png', type: 'texture', name: 'sheep', loader: 'pixi'},
+    {url: '/assets/images/farm-entities/strawberry.png', type: 'texture', name: 'strawberry', loader: 'pixi'},
+    {url: '/assets/images/farm-entities/tomato.png', type: 'texture', name: 'tomato', loader: 'pixi'},
+
+    {url: '/assets/images/money.png', type: 'texture', name: 'money', loader: 'pixi'},
+    {url: '/assets/images/water.png', type: 'texture', name: 'water', loader: 'pixi'},
+    {url: '/assets/images/feed.png', type: 'texture', name: 'feed', loader: 'pixi'},
+    {url: '/assets/images/dark_mode.png', type: 'texture', name: 'darkMode', loader: 'pixi'},
+    {url: '/assets/images/light_mode.png', type: 'texture', name: 'lightMode', loader: 'pixi'},
+    {url: '/assets/images/smoke.png', type: 'texture', name: 'smoke', loader: 'pixi'},
   ],
 
   ground: {
@@ -28,20 +49,21 @@ export const Config = {
 
   lights: {
     day: {
-      ambient: {
-        color: '#ffffff',
-        intensity: 1,
+      hemisphere: {
+        skyColor: '#ffffff',
+        groundColor: '#b5b5b5',
+        intensity: .6,
       },
       directional: {
-        color: '#fff',
-        intensity: 25,
-        position: new Vector3(10, 35, 20),
+        color: '#fff4d6',
+        intensity: 3.5,
+        position: new Vector3(30, 60, 20),
       },
     },
     night: {
-      ambient: {
+      hemisphere: {
         color: '#ffffff',
-        intensity: 1,
+        intensity: .15,
       },
       directional: {
         color: '#fff',
@@ -82,14 +104,14 @@ export const Config = {
     stages: ['soil', 'small', 'medium', 'ripe'],
 
     durations: {
-      corn: [2, 2, 2],
-      tomato: [2, 2, 2],
-      strawberry: [2, 2, 2],
-      grape: [2, 2, 2],
+      corn: 4,
+      tomato: 4,
+      strawberry: 4,
+      grape: 4,
 
-      chicken: [3, 3, 3],
-      sheep: [3, 3, 3],
-      cow: [3, 3, 3],
+      chicken: 6,
+      sheep: 6,
+      cow: 6,
     },
   },
 } as const

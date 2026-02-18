@@ -1,28 +1,40 @@
 import {
+  ACESFilmicToneMapping,
   AmbientLight,
-  DirectionalLight, MathUtils,
+  DirectionalLight, Fog,
+  HemisphereLight,
+  MathUtils, PCFSoftShadowMap,
   PerspectiveCamera,
-  ReinhardToneMapping,
   Scene,
-  SRGBColorSpace, Vector2, Vector3,
+  SRGBColorSpace,
+  Vector3,
   WebGLRenderer,
 } from 'three'
+import {gsap} from 'gsap'
 
 import {Game} from './Game'
 import {Config} from './Config'
 
 
 export class World {
-  #game: Game
+  private game: Game
+  private canvas: HTMLCanvasElement
+
+  private cameraSavedPosition: Vector3 | null = null
+  private tmpCameraRightDirection: Vector3 = new Vector3()
+  private tmpCameraForwardDirection: Vector3 = new Vector3()
+  private tmpCameraMove: Vector3 = new Vector3()
 
   scene: Scene
   camera: PerspectiveCamera
   renderer: WebGLRenderer
-  ambientLight: AmbientLight
+  hemisphereLight: HemisphereLight
   directionalLight: DirectionalLight
 
+
   constructor() {
-    this.#game = Game.getInstance()
+    this.game = Game.getInstance()
+    this.canvas = this.game.threeCanvas
 
     // Scene
     this.scene = new Scene()
@@ -37,10 +49,14 @@ export class World {
     this.camera.lookAt(lookAt.x, lookAt.y, lookAt.z)
     this.scene.add(this.camera)
 
-    // Ambient Light
-    const {color: ambientColor, intensity: ambientIntensity} = Config.lights.day.ambient
-    this.ambientLight = new AmbientLight(ambientColor, ambientIntensity)
-    this.scene.add(this.ambientLight)
+    // Hemisphere Light
+    const {skyColor, groundColor, intensity: hemisphereIntensity} = Config.lights.day.hemisphere
+    this.hemisphereLight = new HemisphereLight(
+      skyColor,
+      groundColor,
+      hemisphereIntensity,
+    )
+    this.scene.add(this.hemisphereLight)
 
     // Directional Light
     const {
@@ -51,103 +67,106 @@ export class World {
     this.directionalLight = new DirectionalLight(directionalColor, directionalIntensity)
     this.directionalLight.position.copy(directionalPosition)
     this.directionalLight.castShadow = true
-    this.directionalLight.shadow.mapSize.set(512, 512)
-    this.directionalLight.shadow.camera.left = -50
-    this.directionalLight.shadow.camera.right = 50
-    this.directionalLight.shadow.camera.top = 50
-    this.directionalLight.shadow.camera.bottom = -50
+    this.directionalLight.shadow.mapSize.set(1024, 1024)
+    this.directionalLight.shadow.camera.left = -25
+    this.directionalLight.shadow.camera.right = 25
+    this.directionalLight.shadow.camera.top = 25
+    this.directionalLight.shadow.camera.bottom = -25
     this.directionalLight.shadow.camera.near = 1
     this.directionalLight.shadow.camera.far = 200
-    this.directionalLight.shadow.bias = -.0001
+    this.directionalLight.shadow.bias = -.0005
     this.directionalLight.shadow.normalBias = .0007
     this.directionalLight.shadow.camera.updateProjectionMatrix()
     this.scene.add(this.directionalLight)
 
     // Renderer
-    const canvas = this.#game.canvasContainer.querySelector('canvas')
-
-    if (!canvas) throw new Error('Canvas not found')
-
     this.renderer = new WebGLRenderer({
-      canvas,
+      canvas: this.canvas,
       antialias: true,
-      preserveDrawingBuffer: true,
+      depth: true,
     })
     this.renderer.shadowMap.enabled = true
+    // this.renderer.shadowMap.type = PCFSoftShadowMap
     this.renderer.outputColorSpace = SRGBColorSpace
-    this.renderer.toneMapping = ReinhardToneMapping
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
+    this.renderer.toneMapping = ACESFilmicToneMapping
+    this.renderer.toneMappingExposure = 1.25
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5))
 
-    this.#game.updatables['world'] = () => this.update()
-    this.initCameraMove()
+    const {color: fogColor, near: fogNear, far: fogFar} = Config.fog
+    this.scene.fog = new Fog(fogColor, fogNear, fogFar)
   }
 
-  update() {
+  render() {
     this.renderer.render(this.scene, this.camera)
   }
 
   resize() {
-    const {clientWidth, clientHeight} = this.#game.canvasContainer
+    const {clientWidth, clientHeight} = this.game.canvasContainer
 
     this.camera.aspect = clientWidth / clientHeight
     this.camera.updateProjectionMatrix()
     this.renderer.setSize(clientWidth, clientHeight)
   }
 
-  initCameraMove() {
-    const canvas = this.#game.canvas
-
-    let dragging = false
-    const last = new Vector2()
-
-    const right = new Vector3()
-    const forward = new Vector3()
-    const move = new Vector3()
-
+  public panBy(pointerDeltaX: number, pointerDeltaY: number) {
     const getPanAxes = () => {
-      right.setFromMatrixColumn(this.camera.matrixWorld, 0)
-      right.y = 0
-      right.normalize()
+      this.tmpCameraRightDirection.setFromMatrixColumn(this.camera.matrixWorld, 0)
+      this.tmpCameraRightDirection.y = 0
+      this.tmpCameraRightDirection.normalize()
 
-      this.camera.getWorldDirection(forward)
-      forward.y = 0
-      forward.normalize()
+      this.camera.getWorldDirection(this.tmpCameraForwardDirection)
+      this.tmpCameraForwardDirection.y = 0
+      this.tmpCameraForwardDirection.normalize()
     }
 
-    const endDrag = () => {
-      dragging = false
+    const {minX, minZ, maxX, maxZ, speed} = Config.camera.move
+
+    getPanAxes()
+
+    this.tmpCameraMove.set(0, 0, 0)
+    this.tmpCameraMove.addScaledVector(this.tmpCameraRightDirection, -pointerDeltaX * speed)
+    this.tmpCameraMove.addScaledVector(this.tmpCameraForwardDirection, pointerDeltaY * speed)
+
+    this.camera.position.add(this.tmpCameraMove)
+
+    this.camera.position.x = MathUtils.clamp(this.camera.position.x, minX, maxX)
+    this.camera.position.z = MathUtils.clamp(this.camera.position.z, minZ, maxZ)
+  }
+
+  focusCameraOnPoint(targetPoint: Vector3) {
+    if (!this.cameraSavedPosition) {
+      this.cameraSavedPosition = this.camera.position.clone()
     }
 
-    canvas.addEventListener('pointerdown', e => {
-      dragging = true
-      last.set(e.clientX, e.clientY)
-      canvas.setPointerCapture(e.pointerId)
-    })
+    const nextCameraPosition = new Vector3(
+      targetPoint.x + 6,
+      Config.camera.position.y * .7,
+      targetPoint.z,
+    )
 
-    canvas.addEventListener('pointerup', endDrag)
-    canvas.addEventListener('pointercancel', endDrag)
-    canvas.addEventListener('lostpointercapture', endDrag)
-
-    canvas.addEventListener('pointermove', e => {
-      if (!dragging) return
-
-      const dx = e.clientX - last.x
-      const dy = e.clientY - last.y
-      last.set(e.clientX, e.clientY)
-
-      const {minX, maxX, minZ, maxZ, speed} = Config.camera.move
-
-      getPanAxes()
-
-      move.set(0, 0, 0)
-      move.addScaledVector(right, -dx * speed)
-      move.addScaledVector(forward, dy * speed)
-
-      this.camera.position.add(move)
-
-      this.camera.position.x = MathUtils.clamp(this.camera.position.x, minX, maxX)
-      this.camera.position.z = MathUtils.clamp(this.camera.position.z, minZ, maxZ)
+    gsap.to(this.camera.position, {
+      x: nextCameraPosition.x,
+      y: nextCameraPosition.y,
+      z: nextCameraPosition.z,
+      duration: 0.35,
+      ease: 'power2.out',
     })
   }
 
+  restoreCamera() {
+    if (!this.cameraSavedPosition) return
+
+    const savedPosition = this.cameraSavedPosition.clone()
+
+    gsap.to(this.camera.position, {
+      x: savedPosition.x,
+      y: savedPosition.y,
+      z: savedPosition.z,
+      duration: 0.35,
+      ease: 'power2.out',
+      onComplete: () => {
+        this.cameraSavedPosition = null
+      },
+    })
+  }
 }
