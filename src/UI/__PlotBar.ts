@@ -10,18 +10,19 @@ type TplotInfo = { name: string, sellPrice: number, type: TFarmEntity }
 
 
 export class __PlotBar {
-  #game: Game
+  private game: Game
   bar: HTMLDivElement
   title: HTMLDivElement
   content: HTMLDivElement
   list: HTMLDivElement
   sellBtn: HTMLButtonElement
-  tl!: gsap.core.Timeline
+  popupTimeline!: gsap.core.Timeline
   isOpen: boolean = false
   mode: TbarMode = 'add'
+  selectedPlot: TplotInfo | null = null
 
   constructor() {
-    this.#game = Game.getInstance()
+    this.game = Game.getInstance()
 
     this.bar = document.createElement('div')
     this.bar.className = 'plot-bar'
@@ -37,7 +38,7 @@ export class __PlotBar {
     closeBtn.textContent = 'Close'
     closeBtn.addEventListener('click', () => {
       this.close()
-      this.#game.plotManager.setHittedPlot(null)
+      this.game.plotManager.setHittedPlot(null)
     })
 
     header.append(this.title, closeBtn)
@@ -47,7 +48,7 @@ export class __PlotBar {
 
     this.sellBtn = document.createElement('button')
     this.sellBtn.className = 'plot-bar__sell'
-    this.sellBtn.addEventListener('click', () => this.#game.plotManager.sellFarmEntity())
+    this.sellBtn.addEventListener('click', () => this.game.plotManager.sellFarmEntity(this.selectedPlot!.id))
 
     this.list = document.createElement('div')
     this.list.className = 'plot-bar__list'
@@ -69,7 +70,7 @@ export class __PlotBar {
 
       const type = el.dataset.entityType as TFarmEntity
 
-      this.#game.plotManager.buyFarmEntity(type)
+      this.game.plotManager.buyFarmEntity(type)
     })
 
     this.bar.append(header, this.content)
@@ -86,9 +87,9 @@ export class __PlotBar {
       pointerEvents: 'none'
     })
 
-    this.tl = gsap.timeline({paused: true})
+    this.popupTimeline = gsap.timeline({paused: true})
 
-    this.tl
+    this.popupTimeline
       .to(this.bar, {
         opacity: 1,
         duration: .1,
@@ -103,7 +104,7 @@ export class __PlotBar {
         ease: 'power3.out',
       }, 0)
 
-    this.tl.eventCallback('onReverseComplete', () => {
+    this.popupTimeline.eventCallback('onReverseComplete', () => {
       this.bar.style.pointerEvents = 'none'
     })
   }
@@ -128,13 +129,13 @@ export class __PlotBar {
       this.sellBtn.textContent = `Sell for ${sellPrice}`
     }
 
-    this.tl.timeScale(1).play(0)
+    this.popupTimeline.timeScale(1).play(0)
   }
 
   close() {
     if (!this.isOpen) return
     this.isOpen = false
 
-    this.tl.timeScale(1.2).reverse()
+    this.popupTimeline.timeScale(1.2).reverse()
   }
 }

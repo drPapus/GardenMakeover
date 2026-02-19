@@ -26,8 +26,9 @@ export type TFarmEntity = TCropBed | TAnimals
 export type TGrowthStage = typeof Config.growth.stages[number]
 export type TGrowthState = 'empty' | 'growingFirstHalf' | 'needsCare' | 'growingSecondHalf' | 'ripe'
 export type TCareAction = 'water' | 'feed'
-type TEvents = {
+export type TPlotEvents = {
   needsCare: { type: 'needsCare', action: TCareAction }
+  careDone: {type: 'careDone'}
   ripe: { type: 'ripe' }
   stageChanged: { type: 'stageChanged' }
 }
@@ -50,7 +51,7 @@ const animalPositions = [
 ]
 
 
-export class Plot extends EventDispatcher<TEvents> {
+export class Plot extends EventDispatcher<TPlotEvents> {
   private game: Game
   private scene: Scene
 
@@ -61,6 +62,7 @@ export class Plot extends EventDispatcher<TEvents> {
 
   private isSelected: boolean = false
   readonly id: TPlotID
+  readonly worldPosition: Vector3 = new Vector3()
 
   private growthState: TGrowthState = 'empty'
   private visualStage: TGrowthStage = 'soil'
@@ -99,6 +101,10 @@ export class Plot extends EventDispatcher<TEvents> {
     return this.isCareRequired
   }
 
+  get isAlreadyRipe() {
+    return this.isRipe
+  }
+
   get growthProgress() {
     if (this.growthState === 'growingFirstHalf') return gsap.utils.mapRange(
       0, this.totalGrowDurationSeconds * growingFirstHalfMultiplier,
@@ -125,9 +131,9 @@ export class Plot extends EventDispatcher<TEvents> {
   }
 
   private initHitBox() {
-    const geom = new BoxGeometry(plotSize.width, 2, plotSize.depth)
-    const mat = new MeshBasicMaterial({color: '#e10000'})
-    const mesh = new Mesh(geom, mat)
+    const geometry = new BoxGeometry(plotSize.width, 2, plotSize.depth)
+    const material = new MeshBasicMaterial({color: '#e10000'})
+    const mesh = new Mesh(geometry, material)
     mesh.name = 'hitbox'
 
     this.hitBox = mesh
@@ -142,18 +148,18 @@ export class Plot extends EventDispatcher<TEvents> {
   private initSelector() {
     const gradientTexture = makeVerticalGradientTexture()
 
-    const geom = new BoxGeometry(6, 2, 10)
+    const geometry = new BoxGeometry(6, 2, 10)
 
-    const sideMat = new MeshBasicMaterial({
-      color: '#43961a',
+    const sideMaterial = new MeshBasicMaterial({
+      color: '#6ef129',
       alphaMap: gradientTexture,
       transparent: true,
       depthWrite: false,
       side: DoubleSide,
     })
-    const hiddenMat = new MeshBasicMaterial({visible: false})
+    const hiddenMaterial = new MeshBasicMaterial({visible: false})
 
-    const mesh = new Mesh(geom, [sideMat, sideMat, hiddenMat, hiddenMat, sideMat, sideMat])
+    const mesh = new Mesh(geometry, [sideMaterial, sideMaterial, hiddenMaterial, hiddenMaterial, sideMaterial, sideMaterial])
     mesh.name = 'selector'
     mesh.position.y += 1
     mesh.visible = false
@@ -168,6 +174,8 @@ export class Plot extends EventDispatcher<TEvents> {
     this.careDone = true
     this.isCareRequired = false
     this.growthState = 'growingSecondHalf'
+
+    this.dispatchEvent({type: 'careDone'})
   }
 
   setFarmEntity(type: TFarmEntity | null, stage: TGrowthStage, firstAdd: boolean = true) {
@@ -201,6 +209,8 @@ export class Plot extends EventDispatcher<TEvents> {
   }
 
   update(deltaSeconds: number) {
+    this.updateWorldPosition()
+
     if (!this.entityType) return
     if (this.growthState === 'empty' || this.growthState === 'ripe') return
     if (this.growthState === 'needsCare') return
@@ -263,6 +273,18 @@ export class Plot extends EventDispatcher<TEvents> {
     this.visualStage = nextStage
 
     this.setFarmEntity(this.entityType, this.visualStage, false)
+  }
+
+  private updateWorldPosition() {
+    this.object.getWorldPosition(this.worldPosition)
+  }
+
+  getWorldPosition(out: Vector3) {
+    return out.copy(this.worldPosition)
+  }
+
+  getWorldPositionWithOffset(out: Vector3, offset: Vector3) {
+    return out.copy(this.worldPosition).add(offset)
   }
 
   private makePlaceholder() {

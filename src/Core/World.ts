@@ -108,7 +108,7 @@ export class World {
     this.renderer.setSize(clientWidth, clientHeight)
   }
 
-  public panBy(pointerDeltaX: number, pointerDeltaY: number) {
+  panBy(pointerDeltaX: number, pointerDeltaY: number) {
     const getPanAxes = () => {
       this.tmpCameraRightDirection.setFromMatrixColumn(this.camera.matrixWorld, 0)
       this.tmpCameraRightDirection.y = 0
@@ -139,7 +139,7 @@ export class World {
     }
 
     const nextCameraPosition = new Vector3(
-      targetPoint.x + 6,
+      targetPoint.x + 10.5,
       Config.camera.position.y * .7,
       targetPoint.z,
     )

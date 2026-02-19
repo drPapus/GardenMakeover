@@ -1,129 +1,246 @@
+import {Container, Text, Sprite} from 'pixi.js'
 import {Vector3} from 'three'
+import gsap from 'gsap'
+
 import {Game} from '../Core/Game'
+import {Plot, TCareAction, TPlotEvents} from '../Entities/Plot'
 
 
-type TPoint = { x: number, y: number }
-type TStep = 'tapPlot' | 'choose' | 'done'
+export type TVector2 = { x: number, y: number }
+
+export type TTutorialStep = 'tapPlot' | 'chooseItem' | 'needCare' | 'sell' | 'done'
+
+const TUTORIAL_TEXT = {
+  tapPlot: 'Tap an empty plot',
+  chooseItem: 'Choose a crop',
+  needWatering: 'Tap to water',
+  needFeed: 'Tap to feed',
+  sell: 'Tap to Sell',
+  done: 'Well done! Let’s keep farming 🚜',
+} as const
 
 
 export class Tutorial {
-  #game: Game
-  root: HTMLDivElement
-  pointer: HTMLDivElement
-  hand: HTMLDivElement
-  info: HTMLDivElement
-  step: TStep = 'tapPlot'
-  targetPlotId: number | null = null
-  #onPlotSelected: () => void
-  #onBought: () => void
+  private game: Game
+  private plot?: Plot
+  container = new Container()
+
+  step: TTutorialStep = 'tapPlot'
+
+  private tmpPlotWorldPosition: Vector3 = new Vector3()
+  private tmpPlotProjectedPosition: Vector3 = new Vector3()
+
+  private worldOffset: Vector3 = new Vector3(0, 3, -2)
+
+  private textOffset: { x: number, y: number } = {x: 60, y: -40}
+  private pointerOffset: { x: number, y: number } = {x: 0, y: 0}
+
+  private handTimeline?: gsap.core.Timeline
+
+  private pointer: Container
+  private hand!: Sprite
+  private info: Text
+
+  private visible: boolean = false
+
+  private onNeedsCare: (e: TPlotEvents['needsCare']) => void
+  private onCareDone: () => void
+  private onRipe: () => void
+  private onPlotSelected: () => void
+  private onBuySuccess: () => void
+  private onSellSuccess: () => void
 
   constructor() {
-    this.#game = Game.getInstance()
+    this.game = Game.getInstance()
 
-    this.root = document.createElement('div')
-    this.root.className = 'tutorial'
-    this.root.innerHTML =
-      '<div class="tutorial__pointer">' +
-      '<div class="tutorial__hand"></div>' +
-      '<div class="tutorial__info"></div>' +
-      '</div>'
+    this.container.sortableChildren = true
+    this.container.eventMode = 'none'
 
-    this.pointer = this.root.querySelector('.tutorial__pointer') as HTMLDivElement
-    this.hand = this.root.querySelector('.tutorial__hand') as HTMLDivElement
-    this.info = this.root.querySelector('.tutorial__info') as HTMLDivElement
+    this.pointer = new Container()
+    this.pointer.zIndex = 9999
+    this.pointer.eventMode = 'none'
+    this.container.addChild(this.pointer)
 
-    document.body.append(this.root)
-    this.hide()
+    this.onNeedsCare = (e) => {
+      this.show()
+      this.initNeedCare(e.action)
+    }
+    this.onCareDone = () => this.hide()
+    this.onRipe = () => {
+      this.show()
+      this.initNeedSell()
+    }
+    this.onPlotSelected = () => this.initChooseItem()
+    this.onBuySuccess = () => {
+      this.step = 'needCare'
+      this.hide()
+    }
+    this.onSellSuccess = () => {
+      this.hide()
+      this.initDone()
+    }
 
-    this.#game.assets.addEventListener('assetsLoaded', () => {
-      const firstPlot = this.#game.plotManager.plots[0]
-      this.targetPlotId = firstPlot ? firstPlot.id : null
-      this.step = 'tapPlot'
-      this.show('Tap an empty plot')
+    this.game.plotManager.addEventListener('plotsInited', () => {
+      this.plot = this.game.plotManager.plots[0]
+
+      this.hand = new Sprite(this.game.assets.textures['hand'])
+      this.hand.width = 80
+      this.hand.height = 80
+      this.hand.anchor.set(0, 0)
+      this.pointer.addChild(this.hand)
+
+      this.createHandAnimation()
+      this.initTapPlot()
+
+      this.plot.addEventListener('needsCare', this.onNeedsCare)
+      this.plot.addEventListener('careDone', this.onCareDone)
+      this.plot.addEventListener('ripe', this.onRipe)
     })
 
-    this.#onPlotSelected = () => this.onPlotSelected()
-    this.#onBought = () => this.onBought()
+    this.info = new Text({
+      text: '',
+      style: {
+        fontFamily: 'Arial',
+        fontSize: 34,
+        fontWeight: '800',
+        fill: '#ffffff',
+        stroke: {color: '#5c3b1e', width: 4},
+        dropShadow: {
+          color: '#3a2412',
+          blur: 4,
+          distance: 2,
+          alpha: 0.7,
+        },
+        wordWrap: true,
+        wordWrapWidth: 300,
+        align: 'center',
+      },
+    })
+    this.info.anchor.set(0, 0)
+    this.pointer.addChild(this.info)
 
-    this.#game.plotManager.addEventListener('plotSelected', this.#onPlotSelected)
+    const tOff = this.textOffset
+    this.info.position.set(tOff.x, tOff.y)
 
-    this.#game.plotManager.addEventListener('buySuccess', this.#onBought)
+    this.hide()
 
-    this.#game.updatables['tutorial'] = () => this.update()
+    this.game.plotManager.addEventListener('plotSelected', this.onPlotSelected)
+    this.game.plotManager.addEventListener('buySuccess', this.onBuySuccess)
+    this.game.plotManager.addEventListener('sellSuccess', this.onSellSuccess)
   }
 
   update() {
-    if (!this.targetPlotId) return
     if (this.step === 'done') return
+    if (!this.plot) return
+    if (!this.visible) return
 
-    if (this.step === 'tapPlot') {
-      const plot = this.#game.plotManager.plots.find(p => p.id === this.targetPlotId)
-      if (!plot) return
+    const {width, height} = this.game.ui.application.screen
 
-      const wpos = plot.object.getWorldPosition(new Vector3())
-      wpos.y -= 2
+    if (this.step === 'tapPlot' || this.step === 'needCare' || this.step === 'sell') {
+      this.plot.getWorldPositionWithOffset(this.tmpPlotWorldPosition, this.worldOffset)
+      this.tmpPlotProjectedPosition.copy(this.tmpPlotWorldPosition).project(this.game.world.camera)
 
-      const pt = this.#worldToScreen(wpos)
-      this.setTargetScreen(pt)
+      const x = Math.round((this.tmpPlotProjectedPosition.x + 1) * 0.5 * width)
+      const y = Math.round((-this.tmpPlotProjectedPosition.y + 1) * 0.5 * height)
 
+      this.setTargetScreen({x, y})
       return
     }
 
-    if (this.step === 'choose') {
-      const target = this.#game.ui.plotBar.bar
-
-      if (!target) return
-      this.setTargetElement(target)
+    if (this.step === 'chooseItem') {
+      const optionsContainer = this.game.ui.addEntityMenu.optionsContainer.children[0]
+      const {x, y} = optionsContainer.getGlobalPosition()
+      this.setTargetScreen({x, y: y - 110})
     }
   }
 
-  onPlotSelected() {
-    this.step = 'choose'
-    this.setText('Choose a crop')
-    this.#game.plotManager.removeEventListener('plotSelected', this.#onPlotSelected)
+  private createHandAnimation() {
+    if (!this.hand) return
+
+    this.handTimeline?.kill()
+
+    const baseY = this.hand.y
+    const baseX = this.hand.x
+
+    this.handTimeline = gsap.timeline({
+      repeat: -1,
+      defaults: {ease: 'sine.inOut'},
+    })
+
+    this.handTimeline
+      .to(this.hand, {
+        y: baseY - 6,
+        x: baseX + 3,
+        duration: 0.4,
+      })
+      .to(this.hand, {
+        y: baseY,
+        x: baseX,
+        duration: 0.4,
+      })
   }
 
-  onBought() {
+  initTapPlot() {
+    this.step = 'tapPlot'
+    this.setText(TUTORIAL_TEXT.tapPlot)
+    this.show()
+  }
+
+  initChooseItem() {
+    this.step = 'chooseItem'
+
+    this.textOffset = {x: -100, y: -45}
+
+    this.info.position.set(this.textOffset.x, this.textOffset.y)
+
+    this.setText(TUTORIAL_TEXT.chooseItem)
+  }
+
+  initNeedCare(action: TCareAction) {
+    this.step = 'needCare'
+
+    this.textOffset = {x: 60, y: -40}
+    this.pointerOffset = {x: 0, y: 0}
+
+    this.info.position.set(this.textOffset.x, this.textOffset.y)
+
+    this.setText(action === 'water' ? TUTORIAL_TEXT.needWatering : TUTORIAL_TEXT.needFeed)
+  }
+
+  initNeedSell() {
+    this.step = 'sell'
+    this.setText(TUTORIAL_TEXT.sell)
+  }
+
+  initDone() {
     this.step = 'done'
-    this.hide()
-    this.#game.ui.popup.open('Well done! Let’s keep farming 🚜')
-    this.#game.plotManager.removeEventListener('buySuccess', this.#onBought)
-    delete this.#game.updatables['tutorial']
+    this.game.ui.popup.open(TUTORIAL_TEXT.done)
+
+    this.game.plotManager.removeEventListener('plotSelected', this.onPlotSelected)
+    this.game.plotManager.removeEventListener('sellSuccess', this.onSellSuccess)
+    this.game.plotManager.removeEventListener('buySuccess', this.onBuySuccess)
+
+    this.plot?.removeEventListener('needsCare', this.onNeedsCare)
+    this.plot?.removeEventListener('careDone', this.onCareDone)
+    this.plot?.removeEventListener('ripe', this.onRipe)
   }
 
-  show(text: string) {
-    this.root.style.display = 'block'
-    this.setText(text)
+  show() {
+    this.visible = true
+    this.container.visible = true
   }
 
   hide() {
-    this.root.style.display = 'none'
+    this.visible = false
+    this.container.visible = false
   }
 
   setText(text: string) {
-    this.info.textContent = text
+    this.info.text = text
   }
 
-  setTargetScreen(pt: TPoint) {
-    this.pointer.style.transform = `translate(${pt.x + 22}px, ${pt.y - 34}px)`
-    this.pointer.setAttribute('data-step', this.step)
-  }
-
-  setTargetElement(el: HTMLElement) {
-    const r = el.getBoundingClientRect()
-    const x = r.left + r.width / 2
-    const y = r.top
-    this.setTargetScreen({x, y})
-  }
-
-  #worldToScreen(pos: Vector3): TPoint {
-    const cam = this.#game.world.camera
-    const canvas = this.#game.canvas
-
-    const v = pos.clone().project(cam)
-    const x = (v.x * 0.5 + 0.5) * canvas.clientWidth
-    const y = (-v.y * 0.5 + 0.5) * canvas.clientHeight
-
-    return {x, y}
+  setTargetScreen(pt: TVector2) {
+    const {x: offsetX, y: offsetY} = this.pointerOffset
+    this.pointer.position.set(pt.x + offsetX, pt.y + offsetY)
   }
 }

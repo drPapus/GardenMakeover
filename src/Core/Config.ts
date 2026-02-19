@@ -41,6 +41,7 @@ export const Config = {
     {url: '/assets/images/dark_mode.png', type: 'texture', name: 'darkMode', loader: 'pixi'},
     {url: '/assets/images/light_mode.png', type: 'texture', name: 'lightMode', loader: 'pixi'},
     {url: '/assets/images/smoke.png', type: 'texture', name: 'smoke', loader: 'pixi'},
+    {url: '/assets/images/hand.png', type: 'texture', name: 'hand', loader: 'pixi'},
   ],
 
   ground: {

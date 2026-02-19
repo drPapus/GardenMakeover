@@ -45,7 +45,7 @@ export class Game {
 
   }
 
-  public static getInstance(canvasContainer?: HTMLDivElement): Game {
+  static getInstance(canvasContainer?: HTMLDivElement): Game {
     if (!Game.instance) {
       if (!canvasContainer) throw new Error('Game container is required on first init')
 

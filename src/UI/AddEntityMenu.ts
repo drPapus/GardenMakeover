@@ -7,19 +7,13 @@ import {Game} from '../Core/Game'
 import {Config} from '../Core/Config'
 
 
-type EntityOption = {
+type TEntityOption = {
   type: TFarmEntity
   name: string
   price: number
 }
 
-const cardOptions = {
-  width: 90,
-  height: 100,
-  radius: 18,
-}
-
-type OptionNodes = {
+type TOptionNodes = {
   root: Container
   background: Graphics
   inner: Graphics
@@ -30,7 +24,6 @@ type OptionNodes = {
   title: Text
 
   badge: Container
-  badgeBg: Graphics
   badgeCoin: Sprite
   badgeText: Text
 
@@ -40,23 +33,30 @@ type OptionNodes = {
 }
 
 
+const cardOptions = {
+  width: 90,
+  height: 100,
+  radius: 18,
+}
+
+
 export class AddEntityMenu {
   private game: Game
   private assets: Assets
 
-  public container: Container
+  container: Container
+  optionsContainer: Container
 
   private overlay: Graphics
   private content: Container
 
   private ring: Graphics
-  private optionsContainer: Container
   private centerButtonContainer: Container
 
-  private tl!: gsap.core.Timeline
+  private timeline!: gsap.core.Timeline
   private isOpen: boolean = false
 
-  private optionNodes = new Map<TFarmEntity, OptionNodes>()
+  private optionNodes = new Map<TFarmEntity, TOptionNodes>()
   private lastCenterX: number = 0
   private lastCenterY: number = 0
 
@@ -95,7 +95,7 @@ export class AddEntityMenu {
     this.assets.addEventListener('assetsLoaded', () => {
       this.buildOnce()
 
-      this.tl = gsap.timeline({
+      this.timeline = gsap.timeline({
         paused: true,
         defaults: {ease: 'power2.out'},
         onReverseComplete: () => {
@@ -104,22 +104,24 @@ export class AddEntityMenu {
         },
       })
 
-      this.tl.to(this.overlay, {alpha: 0.22, duration: 0.12}, 0)
-      this.tl.to(this.content, {alpha: 1, duration: 0.14}, 0)
-      this.tl.to(this.content.scale, {x: 1, y: 1, duration: 0.18}, 0)
+      this.timeline.to(this.overlay, {alpha: 0.22, duration: 0.12}, 0)
+      this.timeline.to(this.content, {alpha: 1, duration: 0.14}, 0)
+      this.timeline.to(this.content.scale, {x: 1, y: 1, duration: 0.18}, 0)
 
       const nodes = [...this.optionNodes.values()]
-      nodes.forEach((n, i) => {
-        this.tl.to(n.root, {alpha: 1, duration: 0.12}, 0.04 + i * 0.02)
-        this.tl.to(n.root.scale, {x: 1, y: 1, duration: 0.16, ease: 'back.out(1.6)'}, 0.04 + i * 0.02)
+      nodes.forEach((node, i) => {
+        this.timeline.to(node.root, {alpha: 1, duration: 0.12}, 0.04 + i * 0.02)
+        this.timeline.to(node.root.scale, {x: 1, y: 1, duration: 0.16, ease: 'back.out(1.6)'}, 0.04 + i * 0.02)
       })
     })
   }
 
-  resize(width: number, height: number) {
+  resize() {
+    const {width, height} = this.game.ui.application.screen
+
     this.overlay.clear()
     this.overlay.rect(0, 0, width, height)
-    this.overlay.fill(0x000000)
+    this.overlay.fill('#000000')
     this.overlay.hitArea = new Rectangle(0, 0, width, height)
 
     this.lastCenterX = width / 2
@@ -129,10 +131,7 @@ export class AddEntityMenu {
   }
 
   open() {
-    const width = this.game.ui.application.renderer.width
-    const height = this.game.ui.application.renderer.height
-
-    this.resize(width, height)
+    this.resize()
 
     this.container.visible = true
     this.container.eventMode = 'passive'
@@ -149,7 +148,7 @@ export class AddEntityMenu {
     }
 
     this.isOpen = true
-    this.tl.play(0)
+    this.timeline.play(0)
   }
 
   close() {
@@ -157,7 +156,7 @@ export class AddEntityMenu {
     this.isOpen = false
 
     this.container.eventMode = 'none'
-    this.tl.reverse()
+    this.timeline.reverse()
 
     this.game.plotManager.setHittedPlot(null)
   }
@@ -175,10 +174,10 @@ export class AddEntityMenu {
     const rInner = 132
 
     this.ring.circle(0, 0, rOuter)
-    this.ring.stroke({width: 26, color: 0xffffff, alpha: 0.45})
+    this.ring.stroke({width: 26, color: '#ffffff', alpha: 0.45})
 
     this.ring.circle(0, 0, rInner)
-    this.ring.stroke({width: 10, color: 0xffffff, alpha: 0.22})
+    this.ring.stroke({width: 10, color: '#ffffff', alpha: 0.22})
   }
 
   private buildCenterButton() {
@@ -196,15 +195,15 @@ export class AddEntityMenu {
 
     const bg = new Graphics()
     bg.circle(center, center, center)
-    bg.fill(0xffffff)
+    bg.fill('#ffffff')
     bg.alpha = 0.75
 
     const inner = new Graphics()
     inner.circle(center, center, center - 4)
-    inner.fill(0xffffff)
+    inner.fill('#ffffff')
     inner.alpha = 0.35
 
-    const plusColor = 0xbdbdbd
+    const plusColor = '#bdbdbd'
     const barW = 28
     const barH = 6
     const r = 3
@@ -227,7 +226,7 @@ export class AddEntityMenu {
     this.centerButtonContainer.addChild(deco)
   }
 
-  private buildOptions(entityOptions: EntityOption[]) {
+  private buildOptions(entityOptions: TEntityOption[]) {
     this.optionsContainer.removeChildren()
     this.optionNodes.clear()
 
@@ -266,19 +265,21 @@ export class AddEntityMenu {
   }
 
   private getCardColor(type: TFarmEntity) {
-    const map: Record<string, number> = {
-      grape: 0x9dd6d4,
-      strawberry: 0xf3a0a6,
-      tomato: 0xd6a6f0,
-      chicken: 0xf0d08b,
-      cow: 0xa7d7b5,
+    const map: Record<string, string> = {
+      grape: '#d483be',
+      strawberry: '#61bf8b',
+      tomato: '#e57863',
+      chicken: '#bad962',
+      cow: '#6bc190',
+      sheep: '#d88bc1',
+      corn: '#eec664',
     }
 
     const key = String(type)
-    return map[key] ?? 0xf7edd6
+    return map[key] ?? '#f7edd6'
   }
 
-  private createOption(option: EntityOption): OptionNodes {
+  private createOption(option: TEntityOption): TOptionNodes {
     const {width, height, radius} = cardOptions
 
     const root = new Container()
@@ -293,12 +294,12 @@ export class AddEntityMenu {
 
     const inner = new Graphics()
     inner.roundRect(3, 3, width - 6, height - 8, radius - 2)
-    inner.fill(0xffffff)
+    inner.fill('#ffffff')
     inner.alpha = 0.35
 
     const redFrame = new Graphics()
     redFrame.roundRect(1.5, 1.5, width - 3, height - 3, radius - 2)
-    redFrame.stroke({width: 3, color: 0xff3b30, alpha: 0})
+    redFrame.stroke({width: 3, color: '#ff3b30', alpha: 0})
     redFrame.alpha = 0
 
     const texture = this.assets.textures[option.type]
@@ -311,18 +312,13 @@ export class AddEntityMenu {
 
     const title = new Text({
       text: option.name,
-      style: {fill: 0x3a2a1e, fontSize: 12, fontWeight: '800'},
+      style: {fill: '#3a2a1e', fontSize: 12, fontWeight: '800'},
     })
     title.anchor.set(0.5, 0.5)
     title.x = width / 2
     title.y = 72
 
     const badge = new Container()
-
-    const badgeBg = new Graphics()
-    badgeBg.roundRect(0, 0, 10, 22, 11)
-    badgeBg.fill(0xffd34d)
-    badgeBg.alpha = 0.95
 
     const coinTexture = this.assets.textures['money']
     const badgeCoin = new Sprite(coinTexture)
@@ -332,35 +328,31 @@ export class AddEntityMenu {
 
     const badgeText = new Text({
       text: String(option.price),
-      style: {fill: 0x3a2a1e, fontSize: 11, fontWeight: '900'},
+      style: {fill: '#3a2a1e', fontSize: 11, fontWeight: '900'},
     })
     badgeText.anchor.set(0, 0.5)
 
-    const padX = 8
-    const gap = 4
-    const h = 22
+    const badgePaddingX = 8
+    const badgeGap = 4
+    const badgeHeight = 22
 
-    badgeCoin.x = padX + badgeCoin.width / 2
-    badgeCoin.y = h / 2
+    badgeCoin.x = badgePaddingX + badgeCoin.width / 2
+    badgeCoin.y = badgeHeight / 2
 
-    badgeText.x = badgeCoin.x + badgeCoin.width / 2 + gap
-    badgeText.y = h / 2
+    badgeText.x = badgeCoin.x + badgeCoin.width / 2 + badgeGap
+    badgeText.y = badgeHeight / 2
 
-    const w = padX + badgeCoin.width + gap + badgeText.width + padX
-    badgeBg.clear()
-    badgeBg.roundRect(0, 0, w, h, 11)
-    badgeBg.fill(0xffd34d)
+    const badgeWidth = badgePaddingX + badgeCoin.width + badgeGap + badgeText.width + badgePaddingX
 
-    badge.addChild(badgeBg)
     badge.addChild(badgeCoin)
     badge.addChild(badgeText)
 
-    badge.x = width - w - 6
-    badge.y = height - h - 8
+    badge.x = width - badgeWidth - 6
+    badge.y = height - badgeHeight - 3
 
     const disabledOverlay = new Graphics()
     disabledOverlay.roundRect(0, 0, width, height, radius)
-    disabledOverlay.fill(0x000000)
+    disabledOverlay.fill('#000000')
     disabledOverlay.alpha = 0
 
     root.addChild(background)
@@ -371,7 +363,7 @@ export class AddEntityMenu {
     root.addChild(disabledOverlay)
     root.addChild(redFrame)
 
-    const nodes: OptionNodes = {
+    const nodes: TOptionNodes = {
       root,
       background,
       inner,
@@ -380,7 +372,6 @@ export class AddEntityMenu {
       preview,
       title,
       badge,
-      badgeBg,
       badgeCoin,
       badgeText,
       type: option.type,
@@ -394,10 +385,6 @@ export class AddEntityMenu {
     }
 
     const hoverOut = () => {
-      if (!nodes.affordable) {
-        gsap.to(root.scale, {x: 1, y: 1, duration: 0.12, ease: 'power2.out'})
-        return
-      }
       gsap.to(root.scale, {x: 1, y: 1, duration: 0.12, ease: 'power2.out'})
     }
 
@@ -412,12 +399,12 @@ export class AddEntityMenu {
     }
 
     const shakeAndWarn = () => {
-      const tl = gsap.timeline()
-      tl.to(root, {x: root.x - 4, duration: 0.04, ease: 'power2.out'})
-      tl.to(root, {x: root.x + 6, duration: 0.06, ease: 'power2.out'})
-      tl.to(root, {x: root.x - 4, duration: 0.06, ease: 'power2.out'})
-      tl.to(root, {x: root.x + 2, duration: 0.04, ease: 'power2.out'})
-      tl.to(root, {x: root.x, duration: 0.04, ease: 'power2.out'})
+      const timeline = gsap.timeline()
+      timeline.to(root, {x: root.x - 4, duration: 0.04, ease: 'power2.out'})
+      timeline.to(root, {x: root.x + 6, duration: 0.06, ease: 'power2.out'})
+      timeline.to(root, {x: root.x - 4, duration: 0.06, ease: 'power2.out'})
+      timeline.to(root, {x: root.x + 2, duration: 0.04, ease: 'power2.out'})
+      timeline.to(root, {x: root.x, duration: 0.04, ease: 'power2.out'})
 
       gsap.killTweensOf(redFrame)
       redFrame.alpha = 1
@@ -448,33 +435,24 @@ export class AddEntityMenu {
   }
 
   private updateAffordability() {
-    for (const n of this.optionNodes.values()) {
-      const affordable = this.game.economy.canAfford(n.price)
-      n.affordable = affordable
+    for (const node of this.optionNodes.values()) {
+      const affordable = this.game.economy.canAfford(node.price)
+      node.affordable = affordable
 
       if (affordable) {
-        n.root.cursor = 'pointer'
-        n.root.alpha = 1
-        n.disabledOverlay.alpha = 0
+        node.root.cursor = 'pointer'
+        node.root.alpha = 1
+        node.disabledOverlay.alpha = 0
 
-        n.badgeBg.clear()
-        n.badgeBg.roundRect(0, 0, n.badgeBg.width || 1, 22, 11)
-        n.badgeBg.fill(0xffd34d)
-
-        n.badgeText.alpha = 1
-        n.badgeCoin.alpha = 1
+        node.badgeText.alpha = 1
+        node.badgeCoin.alpha = 1
       } else {
-        n.root.cursor = 'not-allowed'
-        n.root.alpha = 0.75
-        n.disabledOverlay.alpha = 0.22
+        node.root.cursor = 'not-allowed'
+        node.root.alpha = 0.75
+        node.disabledOverlay.alpha = 0.22
 
-        const w = n.badgeBg.width || (n.badgeText.width + 40)
-        n.badgeBg.clear()
-        n.badgeBg.roundRect(0, 0, w, 22, 11)
-        n.badgeBg.fill(0x9aa0a6)
-
-        n.badgeText.alpha = 0.85
-        n.badgeCoin.alpha = 0.85
+        node.badgeText.alpha = 0.85
+        node.badgeCoin.alpha = 0.85
       }
     }
   }

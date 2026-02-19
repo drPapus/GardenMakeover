@@ -1,16 +1,16 @@
-import * as THREE from 'three'
+import {Vector3} from 'three'
 import {Container, Sprite, Texture} from 'pixi.js'
 import {gsap} from 'gsap'
+
 import {Game} from '../Core/Game'
 import {Plot, TPlotID} from '../Entities/Plot'
 
 
-type SlotBinding = {
-  object3D: THREE.Object3D | null
-  worldOffset: THREE.Vector3
+type TSlot = {
+  plot: Plot
 }
 
-type Puff = {
+type TPuff = {
   root: Container
   clouds: Sprite[]
   active: boolean
@@ -26,15 +26,16 @@ const slotRectPx = {
 
 export class StageChangeParticles {
   private game: Game
-  public container: Container
+  container: Container
 
   private texture!: Texture
-  private slots: Record<string, SlotBinding> = {}
+  private slots!: Record<string, TSlot>
 
-  private tmpWorldPos = new THREE.Vector3()
-  private tmpProjected = new THREE.Vector3()
+  private tmpWorldPosition: Vector3 = new Vector3()
+  private tmpProjectedPosition: Vector3 = new Vector3()
+  private worldOffset: Vector3 = new Vector3(0, 0, 0)
 
-  private puffs: Puff[] = []
+  private puffs: TPuff[] = []
   private poolSize = 10
 
   private cloudCount = 10
@@ -47,6 +48,8 @@ export class StageChangeParticles {
     this.container.eventMode = 'none'
     this.container.interactiveChildren = false
 
+    this.slots = {} as StageChangeParticles['slots']
+
     this.game.plotManager.addEventListener('plotsInited', () => {
       this.texture = this.game.assets.textures['smoke']
 
@@ -56,8 +59,7 @@ export class StageChangeParticles {
 
       for (const plot of plots) {
         this.slots[plot.id] = {
-          object3D: plot.object,
-          worldOffset: new THREE.Vector3(0, 0.65, 0),
+          plot,
         }
 
         plot.addEventListener('stageChanged' as any, () => {
@@ -96,22 +98,22 @@ export class StageChangeParticles {
     }
   }
 
-  private buildOffsetsForRect(w: number, h: number, count: number) {
+  private buildOffsetsForRect(width: number, height: number, count: number) {
     const offsets: { x: number; y: number }[] = []
 
     const cols = 5
     const rows = 2
 
-    const cellW = w / cols
-    const cellH = h / rows
+    const cellWidth = width / cols
+    const cellHeight = height / rows
 
     let i = 0
     for (let r = 0; r < rows; r++) {
       for (let c = 0; c < cols; c++) {
         if (i >= count) break
 
-        const x = -w / 2 + (c + 0.5) * cellW + (Math.random() - 0.5) * cellW * 0.35
-        const y = -h / 2 + (r + 0.5) * cellH + (Math.random() - 0.5) * cellH * 0.35
+        const x = -width / 2 + (c + 0.5) * cellWidth + (Math.random() - 0.5) * cellWidth * 0.35
+        const y = -height / 2 + (r + 0.5) * cellHeight + (Math.random() - 0.5) * cellHeight * 0.35
 
         offsets.push({x, y})
         i++
@@ -123,7 +125,6 @@ export class StageChangeParticles {
 
   play(plotId: TPlotID) {
     const slot = this.slots[plotId]
-    if (!slot?.object3D) return
 
     const puff = this.puffs.find(p => !p.active)
     if (!puff) return
@@ -138,12 +139,12 @@ export class StageChangeParticles {
     )
 
     for (let i = 0; i < puff.clouds.length; i++) {
-      const s = puff.clouds[i]
+      const cloudSprite = puff.clouds[i]
       const base = this.baseScale + Math.random() * 0.25
-      s.scale.set(base)
-      s.rotation = (Math.random() - 0.5) * 0.6
-      s.x = offsets[i].x
-      s.y = offsets[i].y
+      cloudSprite.scale.set(base)
+      cloudSprite.rotation = (Math.random() - 0.5) * 0.6
+      cloudSprite.x = offsets[i].x
+      cloudSprite.y = offsets[i].y
     }
 
     puff.root.visible = true
@@ -151,6 +152,7 @@ export class StageChangeParticles {
     // puff.root.scale.set(0.75)
 
     gsap.killTweensOf(puff.root)
+    gsap.killTweensOf(puff.root.scale)
     gsap.timeline({
       onComplete: () => {
         puff.active = false
@@ -168,31 +170,23 @@ export class StageChangeParticles {
 
   update() {
     const camera = this.game.world.camera
-    const renderer = this.game.ui.application.renderer
-    const w = renderer.width
-    const h = renderer.height
+    const {width, height} = this.game.ui.application.screen
 
     for (const puff of this.puffs) {
       if (!puff.active || !puff.plotId) continue
 
       const slot = this.slots[puff.plotId]
-      if (!slot?.object3D) {
+
+      slot.plot.getWorldPositionWithOffset(this.tmpWorldPosition, this.worldOffset)
+      this.tmpProjectedPosition.copy(this.tmpWorldPosition).project(camera)
+
+      if (this.tmpProjectedPosition.z < -1 || this.tmpProjectedPosition.z > 1) {
         puff.root.visible = false
         continue
       }
 
-      slot.object3D.getWorldPosition(this.tmpWorldPos)
-      this.tmpWorldPos.add(slot.worldOffset)
-
-      this.tmpProjected.copy(this.tmpWorldPos).project(camera)
-
-      if (this.tmpProjected.z < -1 || this.tmpProjected.z > 1) {
-        puff.root.visible = false
-        continue
-      }
-
-      const x = (this.tmpProjected.x + 1) * 0.5 * w
-      const y = (-this.tmpProjected.y + 1) * 0.5 * h
+      const x = (this.tmpProjectedPosition.x + 1) * 0.5 * width
+      const y = (-this.tmpProjectedPosition.y + 1) * 0.5 * height
 
       puff.root.visible = true
       puff.root.position.set(x, y)

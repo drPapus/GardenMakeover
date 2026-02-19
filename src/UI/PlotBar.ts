@@ -16,7 +16,7 @@ export class PlotBar {
   content: HTMLDivElement
   list: HTMLDivElement
   sellBtn: HTMLButtonElement
-  tl!: gsap.core.Timeline
+  popupTimeline!: gsap.core.Timeline
   isOpen: boolean = false
   mode: TbarMode = 'add'
 
@@ -86,9 +86,9 @@ export class PlotBar {
       pointerEvents: 'none'
     })
 
-    this.tl = gsap.timeline({paused: true})
+    this.popupTimeline = gsap.timeline({paused: true})
 
-    this.tl
+    this.popupTimeline
       .to(this.bar, {
         opacity: 1,
         duration: .1,
@@ -103,7 +103,7 @@ export class PlotBar {
         ease: 'power3.out',
       }, 0)
 
-    this.tl.eventCallback('onReverseComplete', () => {
+    this.popupTimeline.eventCallback('onReverseComplete', () => {
       this.bar.style.pointerEvents = 'none'
     })
   }
@@ -128,13 +128,13 @@ export class PlotBar {
       this.sellBtn.textContent = `Sell for ${sellPrice}`
     }
 
-    this.tl.timeScale(1).play(0)
+    this.popupTimeline.timeScale(1).play(0)
   }
 
   close() {
     if (!this.isOpen) return
     this.isOpen = false
 
-    this.tl.timeScale(1.2).reverse()
+    this.popupTimeline.timeScale(1.2).reverse()
   }
 }

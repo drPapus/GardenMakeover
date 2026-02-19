@@ -1,35 +1,31 @@
-import * as THREE from 'three'
-import {Container, Graphics, Rectangle} from 'pixi.js'
+import {Vector3} from 'three'
+import {Container, Graphics} from 'pixi.js'
+
 import {Game} from '../Core/Game'
 import {Plot, TPlotID} from '../Entities/Plot'
 
-
-type ProgressProvider = () => number
-
-type SlotBar = {
-  object3D: THREE.Object3D | null
-  getProgress: ProgressProvider | null
+type TSlot = {
+  plot: Plot
   root: Container
-  bg: Graphics
+  backgroundGraphics: Graphics
   fill: Graphics
   active: boolean
   lastProgress: number
-  worldOffset: THREE.Vector3
 }
 
 
 export class PlotGrowthProgress {
   private game: Game
-  public container: Container
-  private plots!: Plot[]
+  container: Container
 
-  private slots!: Record<TPlotID, SlotBar> = {}
-  private tmpWorldPos = new THREE.Vector3()
-  private tmpProjected = new THREE.Vector3()
+  private slots!: Record<TPlotID, TSlot>
+  private tmpWorldPosition: Vector3 = new Vector3()
+  private tmpProjectedPosition: Vector3 = new Vector3()
 
-  private barWidth = 64
-  private barHeight = 10
-  private barRadius = 6
+  private barWidth: number = 64
+  private barHeight: number = 10
+  private barRadius: number = 6
+  private barWorldOffset: Vector3 = new Vector3(3.5, 0, 0)
 
   constructor() {
     this.game = Game.getInstance()
@@ -38,132 +34,95 @@ export class PlotGrowthProgress {
     this.container.eventMode = 'none'
     this.container.interactiveChildren = false
 
+    this.slots = {} as PlotGrowthProgress['slots']
+
     this.game.plotManager.addEventListener('plotsInited', () => {
-      this.plots = this.game.plotManager.plots
-      for (const plot of this.plots) {
+      for (const plot of this.game.plotManager.plots) {
         const root = new Container()
         root.visible = false
         root.eventMode = 'none'
         root.interactiveChildren = false
 
-        const bg = new Graphics()
+        const backgroundGraphics = new Graphics()
         const fill = new Graphics()
 
-        root.addChild(bg)
+        root.addChild(backgroundGraphics)
         root.addChild(fill)
 
         this.container.addChild(root)
 
         this.slots[plot.id] = {
-          object3D: null,
-          getProgress: null,
+          plot,
           root,
-          bg,
+          backgroundGraphics,
           fill,
           active: false,
           lastProgress: -1,
-          worldOffset: new THREE.Vector3(0, 0.85, 0),
         }
 
-        this.drawBar(bg, fill, 0)
-        this.bindSlot(plot.id, plot.object, () => plot.growthProgress)
+        this.drawBar(backgroundGraphics, fill, -1)
       }
     })
   }
 
-  setSize(width: number, height: number, radius: number = 6) {
-    this.barWidth = width
-    this.barHeight = height
-    this.barRadius = radius
-
-    for (const key in this.slots) {
-      // @ts-ignore
-      const s = this.slots[key]
-      this.drawBar(s.bg, s.fill, Math.max(0, s.lastProgress))
-    }
-  }
-
-  bindSlot(
-    id: TPlotID,
-    object3D: THREE.Object3D,
-    getProgress: ProgressProvider,
-    worldOffsetY: number = 0.85,
-  ) {
-    const s = this.slots[id]
-    s.object3D = object3D
-    s.getProgress = getProgress
-    s.worldOffset.set(0, worldOffsetY, 0)
-  }
-
-  update = () => {
+  update() {
     const camera = this.game.world.camera
-    const renderer = this.game.ui.application.renderer
-    const w = renderer.width
-    const h = renderer.height
+    const {width, height} = this.game.ui.application.renderer
 
-    for (const key in this.slots) {
-      // @ts-ignore
-      const s = this.slots[key]
-      if (!s.object3D || !s.getProgress) {
-        s.root.visible = false
-        continue
-      }
+    for (const plotId in this.slots) {
+      const slot = this.slots[plotId as unknown as TPlotID]
 
-      let p = s.getProgress()
-      if (!Number.isFinite(p)) p = 0
-      p = Math.max(0, Math.min(1, p))
+      let progress = slot.plot.growthProgress
 
-      const shouldShow = p > 0 && p < 1
+      if (!Number.isFinite(progress)) progress = 0
+
+      progress = Math.max(0, Math.min(1, progress))
+
+      const shouldShow = progress > 0 && progress < 1
 
       if (!shouldShow) {
-        s.active = false
-        s.root.visible = false
+        slot.active = false
+        slot.root.visible = false
         continue
       }
 
-      s.active = true
-      s.root.visible = true
+      slot.active = true
+      slot.root.visible = true
 
-      s.object3D.getWorldPosition(this.tmpWorldPos)
-      this.tmpWorldPos.add(s.worldOffset)
+      slot.plot.getWorldPositionWithOffset(this.tmpWorldPosition, this.barWorldOffset)
+      this.tmpProjectedPosition.copy(this.tmpWorldPosition).project(camera)
 
-      this.tmpProjected.copy(this.tmpWorldPos).project(camera)
-
-      if (this.tmpProjected.z < -1 || this.tmpProjected.z > 1) {
-        s.root.visible = false
+      if (this.tmpProjectedPosition.z < -1 || this.tmpProjectedPosition.z > 1) {
+        slot.root.visible = false
         continue
       }
 
-      const x = (this.tmpProjected.x + 1) * 0.5 * w
-      const y = (-this.tmpProjected.y + 1) * 0.5 * h
+      const x = (this.tmpProjectedPosition.x + 1) * 0.5 * width
+      const y = (-this.tmpProjectedPosition.y + 1) * 0.5 * height
 
-      s.root.x = x - this.barWidth / 2
-      s.root.y = y
+      slot.root.x = Math.round(x - this.barWidth / 2)
+      slot.root.y = Math.round(y)
 
-      if (Math.abs(p - s.lastProgress) > 0.002) {
-        s.lastProgress = p
-        this.drawBar(s.bg, s.fill, p)
+      if (Math.abs(progress - slot.lastProgress) > 0.002) {
+        slot.lastProgress = progress
+        this.drawBar(slot.backgroundGraphics, slot.fill, progress)
       }
     }
   }
 
-  private drawBar(bg: Graphics, fill: Graphics, progress: number) {
-    const w = this.barWidth
-    const h = this.barHeight
-    const r = this.barRadius
+  private drawBar(backgroundGraphics: Graphics, fill: Graphics, progress: number) {
+    const width = this.barWidth
+    const height = this.barHeight
+    const radius = this.barRadius
 
-    bg.clear()
-    bg.roundRect(0, 0, w, h, r)
-    bg.fill(0x000000)
-    bg.alpha = 0.28
+    backgroundGraphics.clear()
+    backgroundGraphics.roundRect(0, 0, width, height, radius)
+    backgroundGraphics.fill({color: '#000000', alpha: .3})
 
-    const fillW = Math.max(0, Math.min(w, w * progress))
+    const fillWidth = Math.max(0, Math.min(width, width * progress))
 
     fill.clear()
-    fill.roundRect(0, 0, fillW, h, r)
-    fill.fill(0x7CFC00)
-    fill.alpha = 0.9
-
-    bg.hitArea = new Rectangle(0, 0, w, h)
+    fill.roundRect(0, 0, fillWidth, height, radius)
+    fill.fill({color: '#7CFC00', alpha: .9})
   }
 }

@@ -1,17 +1,20 @@
 import {Container, Graphics, Text, TextStyle} from 'pixi.js'
 import {gsap} from 'gsap'
 
+import {Game} from '../Core/Game'
+
 
 export class Popup {
+  private game: Game
   container = new Container()
 
-  private background = new Graphics()
-  private label = new Text({
+  private backgroundGraphics = new Graphics()
+  private textLabel = new Text({
     text: '',
     style: new TextStyle({
       fontFamily: 'Arial',
       fontSize: 24,
-      fill: 0x2b2b2b,
+      fill: '#2b2b2b',
       wordWrap: true,
       wordWrapWidth: 560,
     }),
@@ -24,21 +27,25 @@ export class Popup {
 
   private screenWidth: number = 0
   private screenHeight: number = 0
+  private popupWidth: number = 0
+  private popupHeight: number = 0
 
-  private paddingX: number = 28
-  private paddingY: number = 18
-  private radius: number = 18
-  private bottomOffset: number = 14
-  private maxWidth: number = 640
+
+  private paddingX: number = 20
+  private paddingY: number = 10
+  private cornerRadius: number = 18
+  private bottomMargin: number = 14
+  private maxPopupWidth: number = 640
 
   constructor() {
-    this.container.eventMode = 'static'
-    this.container.interactiveChildren = true
+    this.game = Game.getInstance()
+    this.container.eventMode = 'none'
+    this.container.interactiveChildren = false
 
-    this.container.addChild(this.background)
-    this.container.addChild(this.label)
+    this.container.addChild(this.backgroundGraphics)
+    this.container.addChild(this.textLabel)
 
-    this.label.anchor.set(0.5)
+    this.textLabel.anchor.set(0.5)
 
     this.container.visible = false
     this.container.alpha = 0
@@ -46,12 +53,13 @@ export class Popup {
     this.timeline = gsap.timeline({paused: true})
   }
 
-  resize(screenW: number, screenH: number) {
-    this.screenWidth = screenW
-    this.screenHeight = screenH
+  resize() {
+    const {width, height} = this.game.ui.application.screen
 
-    const wrap = Math.min(this.maxWidth - this.paddingX * 2, Math.floor(screenW * 0.86))
-    this.label.style.wordWrapWidth = wrap
+    this.screenWidth = width
+    this.screenHeight = height
+
+    this.textLabel.style.wordWrapWidth = Math.min(this.maxPopupWidth - this.paddingX * 2, Math.floor(width * 0.86))
 
     this.layout()
 
@@ -72,7 +80,7 @@ export class Popup {
       this.container.y = this.getOpenY()
 
       if (this.autoCloseTimeout) clearTimeout(this.autoCloseTimeout)
-      this.autoCloseTimeout = window.setTimeout(() => this.close(), 3000)
+      this.autoCloseTimeout = window.setTimeout(() => this.close(), this.autoCloseDelayMs)
       return
     }
 
@@ -84,9 +92,20 @@ export class Popup {
     this.timeline.clear()
     this.placeClosed()
 
+    this.container.scale.set(0.95)
+
     this.timeline
-      .to(this.container, {alpha: 1, duration: 0.18, ease: 'power2.out'}, 0)
-      .to(this.container, {y: this.getOpenY(), duration: 0.35, ease: 'back.out(1.35)'}, 0)
+      .to(this.container, {
+        alpha: 1,
+        duration: 0.18,
+        ease: 'power2.out',
+      }, 0)
+      .to(this.container, {
+        y: this.getOpenY(),
+        scale: 1,
+        duration: 0.35,
+        ease: 'back.out(1.4)',
+      }, 0)
 
     this.timeline.play(0)
 
@@ -119,19 +138,19 @@ export class Popup {
     this.timeline.play(0)
   }
 
-  setText(text: string) {
-    this.label.text = text
+  private setText(text: string) {
+    this.textLabel.text = text
   }
 
   private layout() {
-    const width = Math.min(this.maxWidth, Math.floor(this.screenWidth * 0.9))
-    this.label.style.wordWrapWidth = Math.min(this.label.style.wordWrapWidth, width - this.paddingX * 2)
+    const width = Math.min(this.maxPopupWidth, Math.floor(this.screenWidth * 0.9))
+    this.textLabel.style.wordWrapWidth = Math.min(this.textLabel.style.wordWrapWidth, width - this.paddingX * 2)
 
-    const textWidth = Math.ceil(this.label.width)
-    const textHeight = Math.ceil(this.label.height)
+    const textWidth = Math.ceil(this.textLabel.width)
+    const textHeight = Math.ceil(this.textLabel.height)
 
-    const backgroundWidth = Math.max(220, textWidth + this.paddingX * 2)
-    const backgroundHeight = Math.max(86, textHeight + this.paddingY * 2)
+    this.popupWidth = Math.max(220, textWidth + this.paddingX * 2)
+    this.popupHeight = Math.max(60, textHeight + this.paddingY * 2)
 
     const x = Math.floor(this.screenWidth * 0.5)
     const y = this.isOpen ? this.getOpenY() : this.getClosedY()
@@ -139,23 +158,25 @@ export class Popup {
     this.container.x = x
     this.container.y = y
 
-    this.background.clear()
-    this.background.roundRect(-backgroundWidth / 2, -backgroundHeight / 2, backgroundWidth, backgroundHeight, this.radius)
-    this.background.fill({color: 0xffffff, alpha: 1})
+    this.backgroundGraphics.clear()
+    this.backgroundGraphics.roundRect(-this.popupWidth / 2, -this.popupHeight / 2, this.popupWidth, this.popupHeight, this.cornerRadius)
+    this.backgroundGraphics.fill({color: 0xfff4e3, alpha: 1})
+    this.backgroundGraphics.stroke({width: 5, color: 0xd4a86a})
 
-    this.label.x = 0
-    this.label.y = 0
+    this.textLabel.x = 0
+    this.textLabel.y = 0
   }
 
   private getOpenY() {
-    const halfHeight = this.background.height / 2
-    return Math.floor(this.screenHeight - this.bottomOffset - halfHeight)
+    const halfHeight = this.popupHeight / 2
+    return Math.floor(this.screenHeight - this.bottomMargin - halfHeight)
   }
 
   private getClosedY() {
-    const halfHeight = this.background.height / 2
+    const halfHeight = this.popupHeight / 2
     return Math.floor(this.screenHeight + halfHeight + 30)
   }
+
 
   private placeClosed() {
     this.container.x = Math.floor(this.screenWidth * 0.5)

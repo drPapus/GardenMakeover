@@ -1,29 +1,28 @@
-import * as THREE from 'three'
+import {Vector3} from 'three'
 import {Container, Text} from 'pixi.js'
 import gsap from 'gsap'
 
 import {Game} from '../Core/Game'
-import {Config} from '../Core/Config'
 import {Plot, TPlotID} from '../Entities/Plot'
 
 
-type SlotEffect = {
-  object3D: THREE.Object3D | null
+type TSlot = {
+  plot: Plot
   text: Text
   active: boolean
   yOffset: number
-  worldOffset: THREE.Vector3
 }
 
 
 export class SpendMoney {
   private game: Game
-  private plots!: Plot[]
-  public container: Container
+  container: Container
 
-  private slots!: Record<TPlotID, SlotEffect> = {}
-  private tmpWorldPos = new THREE.Vector3()
-  private tmpProjected = new THREE.Vector3()
+  private slots!: Record<TPlotID, TSlot>
+  private tmpWorldPosition: Vector3 = new Vector3()
+  private tmpProjectedPosition: Vector3 = new Vector3()
+
+  private worldOffset: Vector3 = new Vector3(0, 0, 0)
 
   constructor() {
     this.game = Game.getInstance()
@@ -32,106 +31,96 @@ export class SpendMoney {
     this.container.eventMode = 'none'
     this.container.interactiveChildren = false
 
+    this.slots = {} as SpendMoney['slots']
+
     this.game.plotManager.addEventListener('plotsInited', () => {
-      this.plots = this.game.plotManager.plots
-      for (const plot of this.plots) {
-        const t = new Text({
+      for (const plot of this.game.plotManager.plots) {
+        const text = new Text({
           text: '',
           style: {
-            fill: 0xff3b30,
+            fill: '#ff3b30',
             fontSize: 40,
             fontWeight: '900',
-            dropShadow: true,
-            dropShadowColor: 0x000000,
-            dropShadowAlpha: 0.35,
-            dropShadowBlur: 2,
-            dropShadowDistance: 1,
+            dropShadow: {
+              color: '#000000',
+              blur: 2,
+              distance: 1,
+              alpha: .35,
+            },
           },
         })
 
-        t.anchor.set(0.5)
-        t.visible = false
+        text.anchor.set(0.5)
+        text.visible = false
 
-        this.container.addChild(t)
+        this.container.addChild(text)
 
         this.slots[plot.id] = {
-          object3D: null,
-          text: t,
+          plot,
+          text,
           active: false,
           yOffset: 0,
-          worldOffset: new THREE.Vector3(0, 0.6, 0),
         }
-
-        this.bindSlot(plot.id, plot.object, 1)
       }
     })
   }
 
-  bindSlot(id: TPlotID, object3D: THREE.Object3D, worldOffsetY: number = 0.6) {
-    const s = this.slots[id]
-    s.object3D = object3D
-    s.worldOffset.set(0, worldOffsetY, 0)
-  }
-
   play(id: TPlotID, cost: number) {
-    const s = this.slots[id]
-    if (!s.object3D) return
+    const slot = this.slots[id]
 
-    s.text.text = `-${cost}`
-    s.text.alpha = 1
-    s.text.scale.set(1)
-    s.yOffset = 0
-    s.active = true
-    s.text.visible = true
+    if (!slot) return
 
-    gsap.killTweensOf(s)
-    gsap.killTweensOf(s.text)
+    slot.text.text = `-${cost}`
+    slot.text.alpha = 1
+    slot.text.scale.set(1)
+    slot.yOffset = 0
+    slot.active = true
+    slot.text.visible = true
 
-    gsap.to(s, {
+    gsap.killTweensOf(slot)
+    gsap.killTweensOf(slot.text)
+
+    gsap.to(slot, {
       yOffset: -150,
       duration: 2.5,
       ease: 'power1.out',
     })
 
-    gsap.to(s.text, {
+    gsap.to(slot.text, {
       alpha: 0,
       duration: 3,
       ease: 'power1.out',
       onComplete: () => {
-        s.active = false
-        s.text.visible = false
+        slot.active = false
+        slot.text.visible = false
       },
     })
   }
 
   update = () => {
     const camera = this.game.world.camera
-    const renderer = this.game.ui.application.renderer
-    const w = renderer.width
-    const h = renderer.height
+    const {width, height} = this.game.ui.application.screen
 
-    for (const key in this.slots) {
-      // @ts-ignore
-      const s = this.slots[key]
-      if (!s.active || !s.object3D) continue
+    for (const plotId in this.slots) {
+      const slot = this.slots[plotId as unknown as TPlotID]
 
-      s.object3D.getWorldPosition(this.tmpWorldPos)
-      this.tmpWorldPos.add(s.worldOffset)
+      if (!slot.active) continue
 
-      this.tmpProjected.copy(this.tmpWorldPos).project(camera)
+      slot.plot.getWorldPositionWithOffset(this.tmpWorldPosition, this.worldOffset)
+      this.tmpProjectedPosition.copy(this.tmpWorldPosition).project(camera)
 
-      if (this.tmpProjected.z < -1 || this.tmpProjected.z > 1) {
-        s.text.visible = false
+      if (this.tmpProjectedPosition.z < -1 || this.tmpProjectedPosition.z > 1) {
+        slot.text.visible = false
         continue
       }
 
-      s.text.visible = true
+      slot.text.visible = true
 
-      const x = (this.tmpProjected.x + 1) * 0.5 * w
-      const y = (-this.tmpProjected.y + 1) * 0.5 * h
+      const x = (this.tmpProjectedPosition.x + 1) * 0.5 * width
+      const y = (-this.tmpProjectedPosition.y + 1) * 0.5 * height
 
-      s.text.x = x
-      s.text.y = y + s.yOffset
+      slot.text.x = Math.round(x)
+      slot.text.y = Math.round(y + slot.yOffset)
     }
   }
 }

@@ -6,9 +6,10 @@ import {Economy} from './Economy'
 
 
 type TEvents = {
-  plotSelected: { type: 'plotSelected' }
+  plotSelected: { type: 'plotSelected', action: number }
   buySuccess: { type: 'buySuccess' }
   plotsInited: { type: 'plotsInited' }
+  sellSuccess: { type: 'sellSuccess' }
 }
 
 
@@ -37,7 +38,6 @@ export class PlotManager extends EventDispatcher<TEvents> {
   }
 
   private preparePlotMaterials() {
-    console.log(this.game.assets.models)
     const toPrepare = [
       'placeholder', 'ground', 'fence',
       'chicken_1', 'cow_1', 'sheep_1',
@@ -107,7 +107,13 @@ export class PlotManager extends EventDispatcher<TEvents> {
 
     if (plot.needsCare) {
       plot.applyCare()
-      this.game.ui.careActionUI.hide(id)
+      this.game.ui.careAction.hide(id)
+      return
+    }
+
+    if (plot.isAlreadyRipe) {
+      this.sellFarmEntity(plot.id)
+      this.game.ui.collectCoin.collect(plot.id)
       return
     }
 
@@ -124,7 +130,7 @@ export class PlotManager extends EventDispatcher<TEvents> {
       this.game.world.focusCameraOnPoint(plot.position)
     }
 
-    this.dispatchEvent({type: 'plotSelected'})
+    this.dispatchEvent({type: 'plotSelected', action: plot.id})
   }
 
   buyFarmEntity(type: TFarmEntity) {
@@ -160,11 +166,12 @@ export class PlotManager extends EventDispatcher<TEvents> {
     const sellPrice = this.getPlotInfo(id)!.sellPrice
 
     this.economy.earn(sellPrice)
-    this.game.ui.addEntityMenu.close()
 
     for (const plot of this.plots) {
       plot.setSelected(false)
     }
+
+    this.dispatchEvent({type: 'sellSuccess'})
 
     plot.setFarmEntity(null, 'ripe', true)
   }

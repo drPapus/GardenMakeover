@@ -6,11 +6,12 @@ import {MoneyBar} from './MoneyBar'
 import {AddEntityMenu} from './AddEntityMenu'
 import {SpendMoney} from './SpendMoney'
 import {PlotGrowthProgress} from './PlotGrowthProgress'
-import {CollectCoinUI} from './CollectCoinUI'
-import {CareActionUI} from './CareActionUi'
+import {CollectCoin} from './CollectCoin'
+import {CareAction} from './CareAction'
 import {DayNightToggle} from './DayNightToggle'
 import {StageChangeParticles} from './StageChangeParticles'
 import {Popup} from './Popup'
+import {Tutorial} from './Tutorial'
 
 
 export class UIManager {
@@ -24,11 +25,12 @@ export class UIManager {
   addEntityMenu: AddEntityMenu
   spendMoney: SpendMoney
   plotGrowthProgress: PlotGrowthProgress
-  collectCoinUI: CollectCoinUI
-  careActionUI: CareActionUI
+  collectCoin: CollectCoin
+  careAction: CareAction
   dayNightToggle: DayNightToggle
   stageChangeParticles: StageChangeParticles
   popup: Popup
+  tutorial: Tutorial
 
   constructor() {
     this.game = Game.getInstance()
@@ -38,11 +40,12 @@ export class UIManager {
     this.addEntityMenu = new AddEntityMenu()
     this.spendMoney = new SpendMoney()
     this.plotGrowthProgress = new PlotGrowthProgress()
-    this.collectCoinUI = new CollectCoinUI(this.moneyBar)
-    this.careActionUI = new CareActionUI()
+    this.collectCoin = new CollectCoin(this.moneyBar)
+    this.careAction = new CareAction()
     this.dayNightToggle = new DayNightToggle()
     this.stageChangeParticles = new StageChangeParticles()
     this.popup = new Popup()
+    this.tutorial = new Tutorial()
 
     this.game.assets.addEventListener('assetsLoaded', () => {
       this.hidePreloader()
@@ -68,10 +71,11 @@ export class UIManager {
     this.stage.addChild(this.dayNightToggle.container)
     this.stage.addChild(this.addEntityMenu.container)
     this.stage.addChild(this.plotGrowthProgress.container)
-    this.stage.addChild(this.collectCoinUI.container)
-    this.stage.addChild(this.careActionUI.container)
+    this.stage.addChild(this.collectCoin.container)
     this.stage.addChild(this.stageChangeParticles.container)
+    this.stage.addChild(this.careAction.container)
     this.stage.addChild(this.popup.container)
+    this.stage.addChild(this.tutorial.container)
   }
 
   resize() {
@@ -81,17 +85,18 @@ export class UIManager {
     this.application.renderer.resize(clientWidth, clientHeight)
 
     this.dayNightToggle.resize()
-    this.moneyBar.resize(clientWidth)
-    this.addEntityMenu.resize(clientWidth, clientHeight)
-    this.popup.resize(clientWidth, clientHeight)
+    this.moneyBar.resize()
+    this.addEntityMenu.resize()
+    this.popup.resize()
   }
 
   render() {
     this.spendMoney.update()
-    this.collectCoinUI.update()
+    this.collectCoin.update()
     this.plotGrowthProgress.update()
-    this.careActionUI.update()
+    this.careAction.update()
     this.stageChangeParticles.update()
+    this.tutorial.update()
     this.application.renderer.render({
       container: this.stage,
       clear: false,
